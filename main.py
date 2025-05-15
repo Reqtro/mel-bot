@@ -4,8 +4,8 @@ from datetime import datetime
 from telegram import Update, ParseMode
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# URL do seu Web App do Google Apps Script que retorna dados do Google Sheets
-GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwwGrQwHCkJqIW_bKMlDk0-50yZEZsJ2MuKGaLdOm675iUlgMM3XC9CCWQkDqUb835C/exec"
+# URL atualizada do seu Web App do Google Apps Script que retorna dados do Google Sheets
+GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwu1jj8sINXMlbPb1RoAi9YgCddfIjQ-1FDwITJ1aplDJLv892chav0mfHkWpaAX-si/exec"
 
 def cumprimento_por_horario():
     hora = datetime.now().hour
@@ -33,8 +33,9 @@ def responder(update: Update, context: CallbackContext):
             "Eu sou a @Mel, a assistente do Sensor de Nível. "
             "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
             "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
-            "E para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
-            "Pronto facinho né? Vamos tentar?"
+            "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
+            "E para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
+            "Pronto facinho né?  Vamos tentar?"
         )
         update.message.reply_text(resposta)
         return
@@ -67,6 +68,17 @@ def responder(update: Update, context: CallbackContext):
         update.message.reply_text(resposta)
         return
 
+    # Pergunta 5: Pedir os links
+    if any(p in msg for p in ["me mande os links", "link", "links", "os links", "sites", "os sites"]):
+        resposta = (
+            "O link do nível da caixa é:\n"
+            "https://docs.google.com/spreadsheets/d/e/2PACX-1vSGQUHrkneAPzQ8_mkF7whwPMJBD_YOEoW9-a717T00lGm8w0J0wpUjgkHkZPh_rU9goDdBhD5bU5u0/pubchart?oid=117157366&format=interactive\n\n"
+            "O link do status do Abastecimento é:\n"
+            "https://docs.google.com/spreadsheets/d/e/2PACX-1vSGQUHrkneAPzQ8_mkF7whwPMJBD_YOEoW9-a717T00lGm8w0J0wpUjgkHkZPh_rU9goDdBhD5bU5u0/pubchart?oid=1264620463&format=interactive"
+        )
+        update.message.reply_text(resposta)
+        return
+
     # Pergunta 4: Qualquer outro assunto
     update.message.reply_text(f"{cumprimento}, Ixi... Não posso te ajudar com isso...")
 
@@ -87,4 +99,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
