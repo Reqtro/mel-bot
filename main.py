@@ -1,7 +1,7 @@
 import os
 import requests
 from datetime import datetime
-from telegram import Update, ParseMode
+from telegram import Update  # sem ParseMode
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
 # URL atualizada do seu Web App do Google Apps Script que retorna dados do Google Sheets
