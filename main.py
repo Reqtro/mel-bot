@@ -1,6 +1,6 @@
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from telegram import Update  # sem ParseMode
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
@@ -8,7 +8,9 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwu1jj8sINXMlbPb1RoAi9YgCddfIjQ-1FDwITJ1aplDJLv892chav0mfHkWpaAX-si/exec"
 
 def cumprimento_por_horario():
-    hora = datetime.now().hour
+    hora_utc = datetime.utcnow()
+    hora_brasil = hora_utc - timedelta(hours=3)  # Ajusta UTC para horário de Brasília (GMT-3)
+    hora = hora_brasil.hour
     if 6 <= hora < 12:
         return "Bom dia"
     elif 12 <= hora < 18:
