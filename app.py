@@ -1,15 +1,21 @@
 import os
 import requests
 from datetime import datetime, timedelta
-from telegram import Update  # sem ParseMode
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from flask import Flask, request
+from telegram import Bot, Update
+from telegram.ext import Dispatcher, MessageHandler, Filters, CallbackContext
 
-# URL atualizada do seu Web App do Google Apps Script que retorna dados do Google Sheets
+# URL atualizada do seu Web App do Google Apps Script
 GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwu1jj8sINXMlbPb1RoAi9YgCddfIjQ-1FDwITJ1aplDJLv892chav0mfHkWpaAX-si/exec"
+
+TOKEN = os.getenv("BOT_TOKEN")
+bot = Bot(token=TOKEN)
+
+app = Flask(__name__)
 
 def cumprimento_por_horario():
     hora_utc = datetime.utcnow()
-    hora_brasil = hora_utc - timedelta(hours=3)  # Ajusta UTC para horário de Brasília (GMT-3)
+    hora_brasil = hora_utc - timedelta(hours=3)
     hora = hora_brasil.hour
     if 6 <= hora < 12:
         return "Bom dia"
@@ -21,14 +27,12 @@ def cumprimento_por_horario():
 def responder(update: Update, context: CallbackContext):
     msg = update.message.text.lower()
     usuario = update.message.from_user.first_name
-    texto = update.message.text
 
     if "@mel" not in msg:
-        return  # Só responde se for mencionado @Mel
+        return
 
     cumprimento = cumprimento_por_horario()
 
-    # Pergunta 1: Apresente-se
     if any(p in msg for p in ["apresente-se", "apresenta-se", "apresentar", "se mostrar"]):
         resposta = (
             f"{cumprimento}, {usuario}!\n\n"
@@ -39,10 +43,9 @@ def responder(update: Update, context: CallbackContext):
             "E para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
             "Pronto facinho né?  Vamos tentar?"
         )
-        update.message.reply_text(resposta)
+        bot.send_message(chat_id=update.effective_chat.id, text=resposta)
         return
 
-    # Buscar dados do Google Sheets via Web App
     try:
         response = requests.get(GOOGLE_SHEETS_URL)
         dados = response.json()
@@ -52,25 +55,22 @@ def responder(update: Update, context: CallbackContext):
         nivel = None
         abastecimento = None
 
-    # Pergunta 2: Qual o nível?
-    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nivel?", "nível", "nivel"]):
+    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel?", "nível", "nivel"]):
         if nivel is not None:
             resposta = f"{cumprimento}, o nível atual é: {nivel}"
         else:
             resposta = f"{cumprimento}, não consegui obter o nível agora."
-        update.message.reply_text(resposta)
+        bot.send_message(chat_id=update.effective_chat.id, text=resposta)
         return
 
-    # Pergunta 3: Qual o abs (abastecimento)?
     if any(p in msg for p in ["qual o abs", "abs?", "abs", "abastecimento", "status do abastecimento"]):
         if abastecimento is not None:
             resposta = f"{cumprimento}, o status do abastecimento é: {abastecimento}"
         else:
             resposta = f"{cumprimento}, não consegui obter o status do abastecimento agora."
-        update.message.reply_text(resposta)
+        bot.send_message(chat_id=update.effective_chat.id, text=resposta)
         return
 
-    # Pergunta 5: Pedir os links
     if any(p in msg for p in ["me mande os links", "link", "links", "os links", "sites", "os sites"]):
         resposta = (
             "O link do nível da caixa é:\n"
@@ -78,26 +78,25 @@ def responder(update: Update, context: CallbackContext):
             "O link do status do Abastecimento é:\n"
             "https://docs.google.com/spreadsheets/d/e/2PACX-1vSGQUHrkneAPzQ8_mkF7whwPMJBD_YOEoW9-a717T00lGm8w0J0wpUjgkHkZPh_rU9goDdBhD5bU5u0/pubchart?oid=1264620463&format=interactive"
         )
-        update.message.reply_text(resposta)
+        bot.send_message(chat_id=update.effective_chat.id, text=resposta)
         return
 
-    # Pergunta 4: Qualquer outro assunto
-    update.message.reply_text(f"{cumprimento}, Ixi... Não posso te ajudar com isso...")
+    bot.send_message(chat_id=update.effective_chat.id, text=f"{cumprimento}, Ixi... Não posso te ajudar com isso...")
 
-def main():
-    token = os.getenv("BOT_TOKEN")
-    if not token:
-        print("ERRO: Defina a variável de ambiente BOT_TOKEN com o token do bot Telegram.")
-        return
+@app.route(f'/{TOKEN}', methods=['POST'])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return 'ok', 200
 
-    updater = Updater(token=token, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(MessageHandler(Filters.text & (~Filters.command), responder))
-
-    print("Bot @Mel rodando...")
-    updater.start_polling()
-    updater.idle()
+@app.route('/')
+def home():
+    return 'Bot @Mel rodando com webhook!', 200
 
 if __name__ == "__main__":
-    main()
+    from telegram.ext import Dispatcher
+    dispatcher = Dispatcher(bot, None, use_context=True)
+    dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), responder))
+
+    PORT = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=PORT)
