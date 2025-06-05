@@ -9,7 +9,7 @@ GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwu1jj8sINXMlbPb1Ro
 
 def cumprimento_por_horario():
     hora = datetime.now().hour
-    if 5 <= hora < 12:
+    if 6 <= hora < 12:
         return "Bom dia"
     elif 12 <= hora < 18:
         return "Boa tarde"
@@ -51,7 +51,7 @@ def responder(update: Update, context: CallbackContext):
         abastecimento = None
 
     # Pergunta 2: Qual o nível?
-    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel?", "nível", "nivel"]):
+    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nivel?", "nível", "nivel"]):
         if nivel is not None:
             resposta = f"{cumprimento}, o nível atual é: {nivel}"
         else:
@@ -60,7 +60,7 @@ def responder(update: Update, context: CallbackContext):
         return
 
     # Pergunta 3: Qual o abs (abastecimento)?
-    if any(p in msg for p in ["qual o abs", "abs?", "abastecimento", "status do abastecimento"]):
+    if any(p in msg for p in ["qual o abs", "abs?", "abs", "abastecimento", "status do abastecimento"]):
         if abastecimento is not None:
             resposta = f"{cumprimento}, o status do abastecimento é: {abastecimento}"
         else:
