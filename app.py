@@ -50,7 +50,9 @@ def responder(update: Update, context: CallbackContext):
 
     if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nivel?", "nível", "nivel"]):
         if nivel is not None:
-            resposta = f"{cumprimento}, o nível atual é: {nivel}"
+            nivel = int(float(response.json()['nivel']))
+            resposta = f"{cumprimento}, o nível atual é: {nivel}%"
+
         else:
             resposta = f"{cumprimento}, não consegui obter o nível agora."
         update.message.reply_text(resposta)
