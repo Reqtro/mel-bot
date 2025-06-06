@@ -3,15 +3,15 @@ import requests
 from datetime import datetime, timedelta
 from flask import Flask, request
 from telegram import Bot, Update
-from telegram.ext import Dispatcher, MessageHandler, Filters, CallbackContext
+from telegram.ext import Dispatcher, CommandHandler, MessageHandler, Filters
 
-# URL atualizada do seu Web App do Google Apps Script
-GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwu1jj8sINXMlbPb1RoAi9YgCddfIjQ-1FDwITJ1aplDJLv892chav0mfHkWpaAX-si/exec"
+app = Flask(__name__)
 
 TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=TOKEN)
+dispatcher = Dispatcher(bot, None, workers=0, use_context=True)
 
-app = Flask(__name__)
+GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwu1jj8sINXMlbPb1RoAi9YgCddfIjQ-1FDwITJ1aplDJLv892chav0mfHkWpaAX-si/exec"
 
 def cumprimento_por_horario():
     hora_utc = datetime.utcnow()
@@ -24,7 +24,7 @@ def cumprimento_por_horario():
     else:
         return "Boa noite"
 
-def responder(update: Update, context: CallbackContext):
+def responder(update, context):
     msg = update.message.text.lower()
     usuario = update.message.from_user.first_name
 
@@ -41,9 +41,9 @@ def responder(update: Update, context: CallbackContext):
             "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
             "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
             "E para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
-            "Pronto facinho né?  Vamos tentar?"
+            "Pronto facinho né? Vamos tentar?"
         )
-        bot.send_message(chat_id=update.effective_chat.id, text=resposta)
+        update.message.reply_text(resposta)
         return
 
     try:
@@ -55,12 +55,12 @@ def responder(update: Update, context: CallbackContext):
         nivel = None
         abastecimento = None
 
-    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel?", "nível", "nivel"]):
+    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nivel?", "nível", "nivel"]):
         if nivel is not None:
             resposta = f"{cumprimento}, o nível atual é: {nivel}"
         else:
             resposta = f"{cumprimento}, não consegui obter o nível agora."
-        bot.send_message(chat_id=update.effective_chat.id, text=resposta)
+        update.message.reply_text(resposta)
         return
 
     if any(p in msg for p in ["qual o abs", "abs?", "abs", "abastecimento", "status do abastecimento"]):
@@ -68,7 +68,7 @@ def responder(update: Update, context: CallbackContext):
             resposta = f"{cumprimento}, o status do abastecimento é: {abastecimento}"
         else:
             resposta = f"{cumprimento}, não consegui obter o status do abastecimento agora."
-        bot.send_message(chat_id=update.effective_chat.id, text=resposta)
+        update.message.reply_text(resposta)
         return
 
     if any(p in msg for p in ["me mande os links", "link", "links", "os links", "sites", "os sites"]):
@@ -78,25 +78,24 @@ def responder(update: Update, context: CallbackContext):
             "O link do status do Abastecimento é:\n"
             "https://docs.google.com/spreadsheets/d/e/2PACX-1vSGQUHrkneAPzQ8_mkF7whwPMJBD_YOEoW9-a717T00lGm8w0J0wpUjgkHkZPh_rU9goDdBhD5bU5u0/pubchart?oid=1264620463&format=interactive"
         )
-        bot.send_message(chat_id=update.effective_chat.id, text=resposta)
+        update.message.reply_text(resposta)
         return
 
-    bot.send_message(chat_id=update.effective_chat.id, text=f"{cumprimento}, Ixi... Não posso te ajudar com isso...")
+    update.message.reply_text(f"{cumprimento}, Ixi... Não posso te ajudar com isso...")
 
-@app.route(f'/{TOKEN}', methods=['POST'])
+# Adiciona handler para mensagens de texto
+dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), responder))
+
+@app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
     dispatcher.process_update(update)
-    return 'ok', 200
+    return "ok"
 
-@app.route('/')
-def home():
-    return 'Bot @Mel rodando com webhook!', 200
+@app.route("/")
+def index():
+    return "Bot @Mel está rodando!"
 
 if __name__ == "__main__":
-    from telegram.ext import Dispatcher
-    dispatcher = Dispatcher(bot, None, use_context=True)
-    dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), responder))
-
-    PORT = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=PORT)
+    port = int(os.environ.get("PORT", "10000"))
+    app.run(host="0.0.0.0", port=port)
