@@ -48,23 +48,22 @@ def responder(update: Update, context: CallbackContext):
         nivel = None
         abastecimento = None
 
-    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nivel?", "nível", "nivel"]):
-        if nivel is not None:
-            nivel = int(float(response.json()['nivel']))
-            resposta = f"{cumprimento}, o nível atual é: {nivel}%"
+   if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nivel?", "nível", "nivel"]):
+    if nivel is not None:
+        nivel = int(float(response.json()['nivel']))
+        resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%"
+    else:
+        resposta = f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
+    update.message.reply_text(resposta)
+    return
 
-        else:
-            resposta = f"{cumprimento}, não consegui obter o nível agora."
-        update.message.reply_text(resposta)
-        return
-
-    if any(p in msg for p in ["qual o abs", "abs?", "abs", "abastecimento", "status do abastecimento"]):
-        if abastecimento is not None:
-            resposta = f"{cumprimento}, o status do abastecimento é: {abastecimento}"
-        else:
-            resposta = f"{cumprimento}, não consegui obter o status do abastecimento agora."
-        update.message.reply_text(resposta)
-        return
+if any(p in msg for p in ["qual o abs", "abs?", "abs", "abastecimento", "status do abastecimento"]):
+    if abastecimento is not None:
+        resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
+    else:
+        resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
+    update.message.reply_text(resposta)
+    return
 
     if any(p in msg for p in ["me mande os links", "link", "links", "os links", "sites", "os sites"]):
         resposta = (
