@@ -48,9 +48,9 @@ def responder(update: Update, context: CallbackContext):
         nivel = None
         abastecimento = None
 
-       if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nivel?", "nível", "nivel"]):
+    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nivel?", "nível", "nível atual"]):
         if nivel is not None:
-            nivel = int(float(response.json()['nivel']))
+            nivel = int(float(nivel))
             resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%"
         else:
             resposta = f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
@@ -75,7 +75,7 @@ def responder(update: Update, context: CallbackContext):
         update.message.reply_text(resposta)
         return
 
-    update.message.reply_text(f"{cumprimento}, Ixi... Não posso te ajudar com isso...")
+    update.message.reply_text(f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso...")
 
 def main():
     token = os.getenv("BOT_TOKEN")
