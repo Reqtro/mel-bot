@@ -22,13 +22,25 @@ def cumprimento_por_horario():
 
 async def alterar_celula_no_gs(celula, valor):
     try:
-        requests.post(GOOGLE_SHEETS_URL, json={"celula": celula, "valor": valor}, timeout=5)
+        # Envia JSON com chave setGrafico para alterar célula única
+        payload = {
+            "setGrafico": {
+                "celula": celula,
+                "valor": valor
+            }
+        }
+        requests.post(GOOGLE_SHEETS_URL, json=payload, timeout=5)
     except Exception as e:
         print(f"Erro ao enviar POST: {e}")
 
 async def alterar_celulas_no_gs(dic_celulas_valores):
     try:
-        requests.post(GOOGLE_SHEETS_URL, json={"alteracoes": dic_celulas_valores}, timeout=5)
+        # Monta lista para multiplas alterações
+        alteracoes = [{"celula": c, "valor": v} for c, v in dic_celulas_valores.items()]
+        payload = {
+            "multiplosGraficos": alteracoes
+        }
+        requests.post(GOOGLE_SHEETS_URL, json=payload, timeout=5)
     except Exception as e:
         print(f"Erro ao enviar POST: {e}")
 
@@ -51,43 +63,43 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if match_nivel:
         valor = int(match_nivel.group(4))
         await alterar_celula_no_gs("J29", valor)
-        await update.message.reply_text("Alteracao realizada como desejado!")
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
 
     if match_abs:
         valor = int(match_abs.group(4))
         await alterar_celula_no_gs("K29", valor)
-        await update.message.reply_text("Alteracao realizada como desejado!")
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
 
     if "ligar alarmes" in msg:
         await alterar_celulas_no_gs({"H29": 1, "I29": 1})
-        await update.message.reply_text("Alteracao realizada como desejado!")
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
 
     if "desligar alarmes" in msg:
         await alterar_celulas_no_gs({"H29": 2, "I29": 2})
-        await update.message.reply_text("Alteracao realizada como desejado!")
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
 
     if re.search(r"ligar (alarme )?(de )?nivel", msg):
         await alterar_celula_no_gs("H29", 1)
-        await update.message.reply_text("Alteracao realizada como desejado!")
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
 
     if re.search(r"desligar (alarme )?(de )?nivel", msg):
         await alterar_celula_no_gs("H29", 2)
-        await update.message.reply_text("Alteracao realizada como desejado!")
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
 
     if re.search(r"ligar (alarme )?(de )?abs", msg):
         await alterar_celula_no_gs("I29", 1)
-        await update.message.reply_text("Alteracao realizada como desejado!")
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
 
     if re.search(r"desligar (alarme )?(de )?abs", msg):
         await alterar_celula_no_gs("I29", 2)
-        await update.message.reply_text("Alteracao realizada como desejado!")
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
 
     # ------------------ Comandos de Consulta ------------------
