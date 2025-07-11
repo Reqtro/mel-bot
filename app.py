@@ -1,4 +1,11 @@
+import os
 import re
+import requests
+from datetime import datetime
+import pytz
+
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text.lower()
