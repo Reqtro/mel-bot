@@ -152,8 +152,18 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "apresente" in msg:
         resposta = (
             f"{cumprimento}, {usuario}!\n\n"
-            "Eu sou a @Mel, a assistente do Sensor de Nível.\n"
-            "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água."
+    "Eu sou a @Mel, a assistente do Sensor de Nível. "
+    "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
+    "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
+    "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
+    "Para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
+    "Para saber qual é o status dos alarmes, é só me chamar assim: \"@Mel alarme\"\n"
+    "Para saber quais são os níveis definidos para acionamento dos alarmes, me chame assim: \"@Mel nivel alarmes\"\n"
+    "Para modificar o status dos alarmes, pode me chamar assim: \"@Mel ligar alarmes\" ou \"@Mel desligar alarmes\", "
+    "também \"@Mel ligar alarme de nivel\" ou ainda \"@Mel desligar alarme de abs\"\n"
+    "E para modificar o nível de acionamento dos alarmes, é só me chamar assim: \"@Mel alterar alarme de nivel 45\" "
+    "ou \"@Mel alterar alarme de abs 60\"\n"
+    "Pronto, facinho né? Vamos tentar?"
         )
         await update.message.reply_text(resposta)
         return
