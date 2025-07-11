@@ -29,15 +29,20 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = requests.get(GOOGLE_SHEETS_URL)
         dados = response.json()
+
         nivel = dados.get("nivel")
         abastecimento = dados.get("abastecimento")
 
+        # Extração correta dos valores após os prefixos
         h = int(dados.get("h", "S. Alarme N.: 0").split(":")[-1].strip())
         i = int(dados.get("i", "S. Alarme ABS: 0").split(":")[-1].strip())
         j = int(dados.get("j", "N. Alarme N.: 0").split(":")[-1].strip())
         k = int(dados.get("k", "N. Alarme ABS: 0").split(":")[-1].strip())
-    except Exception:
+    except Exception as e:
+        print(f"Erro ao buscar planilha: {e}")
         nivel = abastecimento = h = i = j = k = None
+
+    # ---------------------- Comandos ----------------------
 
     if any(p in msg for p in ["apresente-se", "apresenta-se", "apresentar", "se mostrar"]):
         resposta = (
@@ -87,9 +92,12 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(resposta)
         return
 
+    # Resposta padrão
     await update.message.reply_text(f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso...")
 
-async def main():
+# ---------------------- Rodar o Bot ----------------------
+
+def main():
     token = os.getenv("BOT_TOKEN")
     if not token:
         print("ERRO: Defina a variável de ambiente BOT_TOKEN com o token do bot Telegram.")
@@ -99,18 +107,7 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
 
     print("Bot @Mel rodando...")
-    await app.run_polling()
+    app.run_polling()  # Usa o loop interno do PTB (modo seguro no Railway)
 
 if __name__ == "__main__":
-    import asyncio
-    try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        if "This event loop is already running" in str(e):
-            import nest_asyncio
-            nest_asyncio.apply()
-            loop = asyncio.get_event_loop()
-            loop.create_task(main())
-            loop.run_forever()
-        else:
-            raise
+    main()
