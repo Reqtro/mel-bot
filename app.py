@@ -1,30 +1,4 @@
-import os
-import requests
-from datetime import datetime
-import pytz
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
-
-GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbyHjLESxkcUWO3yAy0rdDJrvWi5zRJ4rqqiHpRg1-n4Os0dSb0Y4Rmuu_xifWOKeg37/exec"
-
-def cumprimento_por_horario():
-    tz = pytz.timezone('America/Sao_Paulo')
-    hora = datetime.now(tz).hour
-    if 6 <= hora < 12:
-        return "Bom dia"
-    elif 12 <= hora < 18:
-        return "Boa tarde"
-    else:
-        return "Boa noite"
-
-def alterar_celula_graficos(celula, valor):
-    try:
-        payload = {"setGrafico": {"celula": celula, "valor": valor}}
-        response = requests.post(GOOGLE_SHEETS_URL, json=payload)
-        return response.ok
-    except Exception as e:
-        print(f"Erro ao alterar planilha: {e}")
-        return False
+import re
 
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text.lower()
@@ -42,7 +16,6 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nivel = dados.get("nivel")
         abastecimento = dados.get("abastecimento")
 
-        # Extração correta dos valores após os prefixos
         h = int(dados.get("h", "S. Alarme N.: 0").split(":")[-1].strip())
         i = int(dados.get("i", "S. Alarme ABS: 0").split(":")[-1].strip())
         j = int(dados.get("j", "N. Alarme N.: 0").split(":")[-1].strip())
@@ -51,20 +24,65 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"Erro ao buscar planilha: {e}")
         nivel = abastecimento = h = i = j = k = None
 
-    # ---------------------- Comandos de informação ----------------------
+    # --- COMANDOS DE ALTERAÇÃO (mais específicos) ---
 
-    if any(p in msg for p in ["apresente-se", "apresenta-se", "apresentar", "se mostrar"]):
-        resposta = (
-            f"{cumprimento}, {usuario}!\n\n"
-            "Eu sou a @Mel, a assistente do Sensor de Nível. "
-            "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
-            "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
-            "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
-            "E para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
-            "Pronto facinho né? Vamos tentar?"
-        )
-        await update.message.reply_text(resposta)
+    # Alterar nivel/abs X (exemplo: "@mel alterar nivel 60" ou com %)
+    alterar_nivel_match = re.search(r"alterar nivel (\d{1,3})", msg)
+    alterar_abs_match = re.search(r"alterar abs (\d{1,3})", msg)
+
+    if alterar_nivel_match:
+        valor = int(alterar_nivel_match.group(1))
+        # Chamar função que faz o POST para alterar J29 na planilha
+        await alterar_celula_no_gs("J29", valor)
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
+
+    if alterar_abs_match:
+        valor = int(alterar_abs_match.group(1))
+        # Chamar função que faz o POST para alterar K29 na planilha
+        await alterar_celula_no_gs("K29", valor)
+        await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    # --- COMANDOS DE LIGAR/DESLIGAR ALARMES ---
+
+    # Ligar alarmes (H29 e I29 = 1)
+    if any(p in msg for p in ["ligar alarmes"]):
+        await alterar_celulas_no_gs({"H29": 1, "I29": 1})
+        await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    # Desligar alarmes (H29 e I29 = 2)
+    if any(p in msg for p in ["desligar alarmes"]):
+        await alterar_celulas_no_gs({"H29": 2, "I29": 2})
+        await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    # Ligar Nivel (H29 = 1)
+    if any(p in msg for p in ["ligar nivel", "ligar alarme nivel", "ligar alarme de nivel"]):
+        await alterar_celula_no_gs("H29", 1)
+        await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    # Desligar Nivel (H29 = 2)
+    if any(p in msg for p in ["desligar nivel", "desligar alarme nivel", "desligar alarme de nivel"]):
+        await alterar_celula_no_gs("H29", 2)
+        await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    # Ligar ABS (I29 = 1)
+    if any(p in msg for p in ["ligar abs", "ligar alarme abs", "ligar alarme de abs"]):
+        await alterar_celula_no_gs("I29", 1)
+        await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    # Desligar ABS (I29 = 2)
+    if any(p in msg for p in ["desligar abs", "desligar alarme abs", "desligar alarme de abs"]):
+        await alterar_celula_no_gs("I29", 2)
+        await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    # --- COMANDOS INFORMATIVOS (mais genéricos) ---
 
     if any(p in msg for p in ["nível alarmes", "nivel alarmes", "niveis alarmes", "niveis dos alarmes", "níveis dos alarmes"]):
         resposta = (
@@ -102,73 +120,29 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(resposta)
         return
 
-    # ---------------------- Comandos para alterar a planilha ----------------------
-
-    if "@mel ligar alarmes" in msg:
-        if alterar_celula_graficos("H29", 1) and alterar_celula_graficos("I29", 1):
-            await update.message.reply_text("Alteração realizada como desejado!")
+    if any(p in msg for p in ["apresente-se", "apresenta-se", "apresentar", "se mostrar"]):
+        resposta = (
+            f"{cumprimento}, {usuario}!\n\n"
+            "Eu sou a @Mel, a assistente do Sensor de Nível. "
+            "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
+            "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
+            "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
+            "E para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
+            "Pronto facinho né? Vamos tentar?"
+        )
+        await update.message.reply_text(resposta)
         return
 
-    if "@mel desligar alarmes" in msg:
-        if alterar_celula_graficos("H29", 2) and alterar_celula_graficos("I29", 2):
-            await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if any(p in msg for p in ["@mel ligar nivel", "@mel ligar nível", "@mel ligar alarme nivel", "@mel ligar alarme nível", "@mel ligar alarme de nivel", "@mel ligar alarme de nível"]):
-        if alterar_celula_graficos("H29", 1):
-            await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if any(p in msg for p in ["@mel desligar nivel", "@mel desligar nível", "@mel desligar alarme nivel", "@mel desligar alarme nível", "@mel desligar alarme de nivel", "@mel desligar alarme de nível"]):
-        if alterar_celula_graficos("H29", 2):
-            await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if any(p in msg for p in ["@mel ligar abs", "@mel ligar alarme abs", "@mel ligar alarme de abs"]):
-        if alterar_celula_graficos("I29", 1):
-            await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if any(p in msg for p in ["@mel desligar abs", "@mel desligar alarme abs", "@mel desligar alarme de abs"]):
-        if alterar_celula_graficos("I29", 2):
-            await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    # Alterar níveis por comando: @Mel alterar Nivel X
-    if any(p in msg for p in ["@mel alterar nivel", "@mel mudar nivel", "@mel alterar nível", "@mel mudar nível"]):
-        try:
-            # Extrair números do texto (ex: 'alterar nivel 45%')
-            valor = int(''.join(filter(str.isdigit, msg)))
-            if alterar_celula_graficos("J29", valor):
-                await update.message.reply_text("Alteração realizada como desejado!")
-        except:
-            await update.message.reply_text("Formato inválido. Use '@Mel alterar Nivel 40'")
-        return
-
-    if any(p in msg for p in ["@mel alterar abs", "@mel mudar abs"]):
-        try:
-            valor = int(''.join(filter(str.isdigit, msg)))
-            if alterar_celula_graficos("K29", valor):
-                await update.message.reply_text("Alteração realizada como desejado!")
-        except:
-            await update.message.reply_text("Formato inválido. Use '@Mel alterar ABS 40'")
-        return
-
-    # ---------------------- Resposta padrão ----------------------
-
+    # Resposta padrão
     await update.message.reply_text(f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso...")
 
-def main():
-    token = os.getenv("BOT_TOKEN")
-    if not token:
-        print("ERRO: Defina a variável de ambiente BOT_TOKEN com o token do bot Telegram.")
-        return
+# Funções de alteração na planilha, exemplo (você deve implementar as funções reais)
+async def alterar_celula_no_gs(celula, valor):
+    # Implemente a requisição POST para alterar a célula específica na planilha
+    # Por exemplo: requests.post(url, json={"celula": celula, "valor": valor})
+    pass
 
-    app = ApplicationBuilder().token(token).build()
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
+async def alterar_celulas_no_gs(dic_celulas_valores):
+    # Implemente a requisição POST para alterar várias células ao mesmo tempo
+    pass
 
-    print("Bot @Mel rodando...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
