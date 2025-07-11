@@ -17,6 +17,15 @@ def cumprimento_por_horario():
     else:
         return "Boa noite"
 
+def alterar_celula_graficos(celula, valor):
+    try:
+        payload = {"setGrafico": {"celula": celula, "valor": valor}}
+        response = requests.post(GOOGLE_SHEETS_URL, json=payload)
+        return response.ok
+    except Exception as e:
+        print(f"Erro ao alterar planilha: {e}")
+        return False
+
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text.lower()
     usuario = update.message.from_user.first_name
@@ -26,101 +35,126 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cumprimento = cumprimento_por_horario()
 
-    def alterar_planilha(acao, valor):
-        try:
-            response = requests.get(f"{GOOGLE_SHEETS_URL}?acao={acao}&valor={valor}")
-            return response.status_code == 200
-        except:
-            return False
-
-    # ---------------------- Comandos para alterar ----------------------
-
-    if "ligar alarmes" in msg:
-        if alterar_planilha("alterar_h29", 1) and alterar_planilha("alterar_i29", 1):
-            await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if "desligar alarmes" in msg:
-        if alterar_planilha("alterar_h29", 2) and alterar_planilha("alterar_i29", 2):
-            await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if any(p in msg for p in ["ligar nivel", "ligar alarme nivel", "ligar alarme de nivel"]):
-        if alterar_planilha("alterar_h29", 1):
-            await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if any(p in msg for p in ["desligar nivel", "desligar alarme nivel", "desligar alarme de nivel"]):
-        if alterar_planilha("alterar_h29", 2):
-            await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if any(p in msg for p in ["ligar abs", "ligar alarme abs", "ligar alarme de abs"]):
-        if alterar_planilha("alterar_i29", 1):
-            await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if any(p in msg for p in ["desligar abs", "desligar alarme abs", "desligar alarme de abs"]):
-        if alterar_planilha("alterar_i29", 2):
-            await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if any(p in msg for p in ["alterar nivel", "mudar nivel"]):
-        try:
-            valor = int(''.join(filter(str.isdigit, msg)))
-            if alterar_planilha("alterar_j29", valor):
-                await update.message.reply_text("Alteração realizada como desejado!")
-        except:
-            await update.message.reply_text("Não consegui entender o valor informado.")
-        return
-
-    if any(p in msg for p in ["alterar abs", "mudar abs"]):
-        try:
-            valor = int(''.join(filter(str.isdigit, msg)))
-            if alterar_planilha("alterar_k29", valor):
-                await update.message.reply_text("Alteração realizada como desejado!")
-        except:
-            await update.message.reply_text("Não consegui entender o valor informado.")
-        return
-
-    # ---------------------- Respostas normais ----------------------
-
     try:
         response = requests.get(GOOGLE_SHEETS_URL)
         dados = response.json()
+
         nivel = dados.get("nivel")
         abastecimento = dados.get("abastecimento")
+
+        # Extração correta dos valores após os prefixos
         h = int(dados.get("h", "S. Alarme N.: 0").split(":")[-1].strip())
         i = int(dados.get("i", "S. Alarme ABS: 0").split(":")[-1].strip())
         j = int(dados.get("j", "N. Alarme N.: 0").split(":")[-1].strip())
         k = int(dados.get("k", "N. Alarme ABS: 0").split(":")[-1].strip())
-    except:
+    except Exception as e:
+        print(f"Erro ao buscar planilha: {e}")
         nivel = abastecimento = h = i = j = k = None
 
-    if any(p in msg for p in ["nível alarmes", "niveis alarmes", "niveis dos alarmes"]):
-        resposta = f"{cumprimento}, {usuario}!\nOs níveis para os Alarmes são:\nAlarme Nível: {j}%\nAlarme ABS: {k}%"
-        await update.message.reply_text(resposta)
-        return
-
-    if any(p in msg for p in ["alarm", "alarme", "alarmes", "status dos alarmes"]):
-        resposta = f"{cumprimento}, {usuario}!\nO status dos Alarmes é:\nAlarme Nível: {'Ligado' if h == 1 else 'Desligado'}\nAlarme ABS: {'Ligado' if i == 1 else 'Desligado'}"
-        await update.message.reply_text(resposta)
-        return
-
-    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível", "nivel", "nível atual"]):
-        resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
-        await update.message.reply_text(resposta)
-        return
-
-    if any(p in msg for p in ["qual o abs", "abs", "abastecimento", "status do abastecimento"]):
-        resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}" if abastecimento is not None else f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
-        await update.message.reply_text(resposta)
-        return
+    # ---------------------- Comandos de informação ----------------------
 
     if any(p in msg for p in ["apresente-se", "apresenta-se", "apresentar", "se mostrar"]):
-        resposta = (f"{cumprimento}, {usuario}!\n\nEu sou a @Mel, a assistente do Sensor de Nível... (restante da apresentação)")
+        resposta = (
+            f"{cumprimento}, {usuario}!\n\n"
+            "Eu sou a @Mel, a assistente do Sensor de Nível. "
+            "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
+            "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
+            "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
+            "E para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
+            "Pronto facinho né? Vamos tentar?"
+        )
         await update.message.reply_text(resposta)
         return
+
+    if any(p in msg for p in ["nível alarmes", "nivel alarmes", "niveis alarmes", "niveis dos alarmes", "níveis dos alarmes"]):
+        resposta = (
+            f"{cumprimento}, {usuario}!\n"
+            "Os níveis para os Alarmes são:\n"
+            f"Alarme Nível: {j}%\n"
+            f"Alarme ABS: {k}%"
+        )
+        await update.message.reply_text(resposta)
+        return
+
+    if any(p in msg for p in ["alarm", "alarme", "alarmes", "aviso", "avisos", "status dos alarmes"]):
+        resposta = (
+            f"{cumprimento}, {usuario}!\n"
+            f"O status dos Alarmes é:\n"
+            f"Alarme Nível: {'Ligado' if h == 1 else 'Desligado'}\n"
+            f"Alarme ABS: {'Ligado' if i == 1 else 'Desligado'}"
+        )
+        await update.message.reply_text(resposta)
+        return
+
+    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nível", "nível atual"]):
+        if nivel is not None:
+            resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%"
+        else:
+            resposta = f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
+        await update.message.reply_text(resposta)
+        return
+
+    if any(p in msg for p in ["qual o abs", "abs?", "abs", "abastecimento", "status do abastecimento"]):
+        if abastecimento is not None:
+            resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
+        else:
+            resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
+        await update.message.reply_text(resposta)
+        return
+
+    # ---------------------- Comandos para alterar a planilha ----------------------
+
+    if "@mel ligar alarmes" in msg:
+        if alterar_celula_graficos("H29", 1) and alterar_celula_graficos("I29", 1):
+            await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    if "@mel desligar alarmes" in msg:
+        if alterar_celula_graficos("H29", 2) and alterar_celula_graficos("I29", 2):
+            await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    if any(p in msg for p in ["@mel ligar nivel", "@mel ligar nível", "@mel ligar alarme nivel", "@mel ligar alarme nível", "@mel ligar alarme de nivel", "@mel ligar alarme de nível"]):
+        if alterar_celula_graficos("H29", 1):
+            await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    if any(p in msg for p in ["@mel desligar nivel", "@mel desligar nível", "@mel desligar alarme nivel", "@mel desligar alarme nível", "@mel desligar alarme de nivel", "@mel desligar alarme de nível"]):
+        if alterar_celula_graficos("H29", 2):
+            await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    if any(p in msg for p in ["@mel ligar abs", "@mel ligar alarme abs", "@mel ligar alarme de abs"]):
+        if alterar_celula_graficos("I29", 1):
+            await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    if any(p in msg for p in ["@mel desligar abs", "@mel desligar alarme abs", "@mel desligar alarme de abs"]):
+        if alterar_celula_graficos("I29", 2):
+            await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    # Alterar níveis por comando: @Mel alterar Nivel X
+    if any(p in msg for p in ["@mel alterar nivel", "@mel mudar nivel", "@mel alterar nível", "@mel mudar nível"]):
+        try:
+            # Extrair números do texto (ex: 'alterar nivel 45%')
+            valor = int(''.join(filter(str.isdigit, msg)))
+            if alterar_celula_graficos("J29", valor):
+                await update.message.reply_text("Alteração realizada como desejado!")
+        except:
+            await update.message.reply_text("Formato inválido. Use '@Mel alterar Nivel 40'")
+        return
+
+    if any(p in msg for p in ["@mel alterar abs", "@mel mudar abs"]):
+        try:
+            valor = int(''.join(filter(str.isdigit, msg)))
+            if alterar_celula_graficos("K29", valor):
+                await update.message.reply_text("Alteração realizada como desejado!")
+        except:
+            await update.message.reply_text("Formato inválido. Use '@Mel alterar ABS 40'")
+        return
+
+    # ---------------------- Resposta padrão ----------------------
 
     await update.message.reply_text(f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso...")
 
