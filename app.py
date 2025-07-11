@@ -7,7 +7,7 @@ import pytz
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
-GOOGLE_SHEETS_URL = "https://SEU-SCRIPT-URL/exec"
+GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbyHjLESxkcUWO3yAy0rdDJrvWi5zRJ4rqqiHpRg1-n4Os0dSb0Y4Rmuu_xifWOKeg37/exec"
 
 # ---------------------- Funções Auxiliares ----------------------
 def cumprimento_por_horario():
