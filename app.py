@@ -3,9 +3,9 @@ import requests
 from datetime import datetime
 import pytz
 from telegram import Update
-from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
+from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
-GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwu1jj8sINXMlbPb1RoAi9YgCddfIjQ-1FDwITJ1aplDJLv892chav0mfHkWpaAX-si/exec"
+GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbyHjLESxkcUWO3yAy0rdDJrvWi5zRJ4rqqiHpRg1-n4Os0dSb0Y4Rmuu_xifWOKeg37/exec"
 
 def cumprimento_por_horario():
     tz = pytz.timezone('America/Sao_Paulo')
@@ -17,107 +17,90 @@ def cumprimento_por_horario():
     else:
         return "Boa noite"
 
-def extrair_valor(texto):
-    try:
-        return texto.split(":")[-1].strip()
-    except:
-        return None
-
-def responder(update: Update, context: CallbackContext):
+async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text.lower()
     usuario = update.message.from_user.first_name
 
     if "@mel" not in msg:
-        return  # Responde só se mencionar @Mel
+        return
 
     cumprimento = cumprimento_por_horario()
 
     try:
         response = requests.get(GOOGLE_SHEETS_URL)
         dados = response.json()
-
         nivel = dados.get("nivel")
         abastecimento = dados.get("abastecimento")
 
-        # Extrai os alarmes e níveis
-        h = extrair_valor(dados.get("h", ""))
-        i = extrair_valor(dados.get("i", ""))
-        j = extrair_valor(dados.get("j", ""))
-        k = extrair_valor(dados.get("k", ""))
+        h = int(dados.get("h", "S. Alarme N.: 0").split(":")[-1].strip())
+        i = int(dados.get("i", "S. Alarme ABS: 0").split(":")[-1].strip())
+        j = int(dados.get("j", "N. Alarme N.: 0").split(":")[-1].strip())
+        k = int(dados.get("k", "N. Alarme ABS: 0").split(":")[-1].strip())
     except Exception:
         nivel = abastecimento = h = i = j = k = None
 
-    # Comando: Alarmes
-    if any(p in msg for p in ["alarm", "alarme", "alarmes", "aviso", "avisos", "status dos alarmes", "status alarme"]):
-        status_nivel = "Ligado" if h == "1" else "Desligado" if h == "2" else "Indefinido"
-        status_abs = "Ligado" if i == "1" else "Desligado" if i == "2" else "Indefinido"
-
+    if any(p in msg for p in ["apresente-se", "apresenta-se", "apresentar", "se mostrar"]):
         resposta = (
-            f"{cumprimento}, {usuario}!\n"
-            f"O status dos Alarmes é:\n"
-            f"Alarme Nível: {status_nivel}\n"
-            f"Alarme ABS: {status_abs}"
+            f"{cumprimento}, {usuario}!\n\n"
+            "Eu sou a @Mel, a assistente do Sensor de Nível. "
+            "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
+            "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
+            "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
+            "E para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
+            "Pronto facinho né? Vamos tentar?"
         )
-        update.message.reply_text(resposta)
+        await update.message.reply_text(resposta)
         return
 
-    # Comando: Níveis dos Alarmes
-    if any(p in msg for p in ["nivel alarmes", "nível alarmes", "niveis alarmes", "níveis alarmes", "níveis dos alarmes", "niveis dos alarmes"]):
-        resposta = (
-            "Os níveis para os Alarmes são:\n"
-            f"Alarme Nível: {j}%\n"
-            f"Alarme ABS: {k}%"
-        )
-        update.message.reply_text(resposta)
-        return
-
-    # Comando: Qual o nível
-    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nivel?", "nível", "nível atual"]):
+    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nível", "nível atual"]):
         if nivel is not None:
-            nivel = int(float(nivel))
             resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%"
         else:
             resposta = f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
-        update.message.reply_text(resposta)
+        await update.message.reply_text(resposta)
         return
 
-    # Comando: Qual o abs
     if any(p in msg for p in ["qual o abs", "abs?", "abs", "abastecimento", "status do abastecimento"]):
         if abastecimento is not None:
             resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
         else:
             resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
-        update.message.reply_text(resposta)
+        await update.message.reply_text(resposta)
         return
 
-    # Comando: Links
-    if any(p in msg for p in ["me mande os links", "link", "links", "os links", "sites", "os sites"]):
+    if any(p in msg for p in ["alarm", "alarme", "alarmes", "aviso", "avisos", "status dos alarmes"]):
         resposta = (
-            "O link do nível da caixa é:\n"
-            "https://docs.google.com/spreadsheets/d/e/2PACX-1vSGQUHrkneAPzQ8_mkF7whwPMJBD_YOEoW9-a717T00lGm8w0J0wpUjgkHkZPh_rU9goDdBhD5bU5u0/pubchart?oid=117157366&format=interactive\n\n"
-            "O link do status do Abastecimento é:\n"
-            "https://docs.google.com/spreadsheets/d/e/2PACX-1vSGQUHrkneAPzQ8_mkF7whwPMJBD_YOEoW9-a717T00lGm8w0J0wpUjgkHkZPh_rU9goDdBhD5bU5u0/pubchart?oid=1264620463&format=interactive"
+            f"{cumprimento}, {usuario}!\n"
+            f"O status dos Alarmes é:\n"
+            f"Alarme Nível: {'Ligado' if h == 1 else 'Desligado'}\n"
+            f"Alarme ABS: {'Ligado' if i == 1 else 'Desligado'}"
         )
-        update.message.reply_text(resposta)
+        await update.message.reply_text(resposta)
         return
 
-    # Caso nenhum comando seja reconhecido
-    update.message.reply_text(f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso...")
+    if any(p in msg for p in ["nível alarmes", "nivel alarmes", "niveis alarmes", "niveis dos alarmes", "níveis dos alarmes"]):
+        resposta = (
+            "Os níveis para os Alarmes são:\n"
+            f"Alarme Nível: {j}%\n"
+            f"Alarme ABS: {k}%"
+        )
+        await update.message.reply_text(resposta)
+        return
 
-def main():
+    await update.message.reply_text(f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso...")
+
+async def main():
     token = os.getenv("BOT_TOKEN")
     if not token:
         print("ERRO: Defina a variável de ambiente BOT_TOKEN com o token do bot Telegram.")
         return
 
-    updater = Updater(token=token, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(MessageHandler(Filters.text & (~Filters.command), responder))
+    app = ApplicationBuilder().token(token).build()
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
 
     print("Bot @Mel rodando...")
-    updater.start_polling()
-    updater.idle()
+    await app.run_polling()
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
