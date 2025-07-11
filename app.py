@@ -59,6 +59,7 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if any(p in msg for p in ["nível alarmes", "nivel alarmes", "niveis alarmes", "niveis dos alarmes", "níveis dos alarmes"]):
         resposta = (
+            f"{cumprimento}, {usuario}!\n"
             "Os níveis para os Alarmes são:\n"
             f"Alarme Nível: {j}%\n"
             f"Alarme ABS: {k}%"
