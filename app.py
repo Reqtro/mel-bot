@@ -7,6 +7,33 @@ import pytz
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
+GOOGLE_SHEETS_URL = "https://SEU-SCRIPT-URL/exec"
+
+# ---------------------- Funções Auxiliares ----------------------
+def cumprimento_por_horario():
+    tz = pytz.timezone('America/Sao_Paulo')
+    hora = datetime.now(tz).hour
+    if 6 <= hora < 12:
+        return "Bom dia"
+    elif 12 <= hora < 18:
+        return "Boa tarde"
+    else:
+        return "Boa noite"
+
+async def alterar_celula_no_gs(celula, valor):
+    try:
+        requests.post(GOOGLE_SHEETS_URL, json={"celula": celula, "valor": valor}, timeout=5)
+    except Exception as e:
+        print(f"Erro ao enviar POST: {e}")
+
+async def alterar_celulas_no_gs(dic_celulas_valores):
+    try:
+        requests.post(GOOGLE_SHEETS_URL, json={"alteracoes": dic_celulas_valores}, timeout=5)
+    except Exception as e:
+        print(f"Erro ao enviar POST: {e}")
+
+# ---------------------- Função Principal ----------------------
+
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text.lower()
     usuario = update.message.from_user.first_name
@@ -16,82 +43,71 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cumprimento = cumprimento_por_horario()
 
+    # ------------------ Comandos de Alteração ------------------
+
+    match_nivel = re.search(r"(alterar|mudar) (alarme )?(de )?nivel (\d{1,3})", msg)
+    match_abs = re.search(r"(alterar|mudar) (alarme )?(de )?abs (\d{1,3})", msg)
+
+    if match_nivel:
+        valor = int(match_nivel.group(4))
+        await alterar_celula_no_gs("J29", valor)
+        await update.message.reply_text("Alteracao realizada como desejado!")
+        return
+
+    if match_abs:
+        valor = int(match_abs.group(4))
+        await alterar_celula_no_gs("K29", valor)
+        await update.message.reply_text("Alteracao realizada como desejado!")
+        return
+
+    if "ligar alarmes" in msg:
+        await alterar_celulas_no_gs({"H29": 1, "I29": 1})
+        await update.message.reply_text("Alteracao realizada como desejado!")
+        return
+
+    if "desligar alarmes" in msg:
+        await alterar_celulas_no_gs({"H29": 2, "I29": 2})
+        await update.message.reply_text("Alteracao realizada como desejado!")
+        return
+
+    if re.search(r"ligar (alarme )?(de )?nivel", msg):
+        await alterar_celula_no_gs("H29", 1)
+        await update.message.reply_text("Alteracao realizada como desejado!")
+        return
+
+    if re.search(r"desligar (alarme )?(de )?nivel", msg):
+        await alterar_celula_no_gs("H29", 2)
+        await update.message.reply_text("Alteracao realizada como desejado!")
+        return
+
+    if re.search(r"ligar (alarme )?(de )?abs", msg):
+        await alterar_celula_no_gs("I29", 1)
+        await update.message.reply_text("Alteracao realizada como desejado!")
+        return
+
+    if re.search(r"desligar (alarme )?(de )?abs", msg):
+        await alterar_celula_no_gs("I29", 2)
+        await update.message.reply_text("Alteracao realizada como desejado!")
+        return
+
+    # ------------------ Comandos de Consulta ------------------
+
     try:
-        response = requests.get(GOOGLE_SHEETS_URL)
+        response = requests.get(GOOGLE_SHEETS_URL, timeout=5)
         dados = response.json()
 
         nivel = dados.get("nivel")
         abastecimento = dados.get("abastecimento")
 
-        h = int(dados.get("h", "S. Alarme N.: 0").split(":")[-1].strip())
-        i = int(dados.get("i", "S. Alarme ABS: 0").split(":")[-1].strip())
-        j = int(dados.get("j", "N. Alarme N.: 0").split(":")[-1].strip())
-        k = int(dados.get("k", "N. Alarme ABS: 0").split(":")[-1].strip())
+        h = int(dados.get("h", "0").split(":")[-1].strip())
+        i = int(dados.get("i", "0").split(":")[-1].strip())
+        j = int(dados.get("j", "0").split(":")[-1].strip())
+        k = int(dados.get("k", "0").split(":")[-1].strip())
     except Exception as e:
         print(f"Erro ao buscar planilha: {e}")
         nivel = abastecimento = h = i = j = k = None
 
-    # --- COMANDOS DE ALTERAÇÃO (mais específicos) ---
-
-    # Alterar nivel/abs X (exemplo: "@mel alterar nivel 60" ou com %)
-    alterar_nivel_match = re.search(r"alterar nivel (\d{1,3})", msg)
-    alterar_abs_match = re.search(r"alterar abs (\d{1,3})", msg)
-
-    if alterar_nivel_match:
-        valor = int(alterar_nivel_match.group(1))
-        # Chamar função que faz o POST para alterar J29 na planilha
-        await alterar_celula_no_gs("J29", valor)
-        await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if alterar_abs_match:
-        valor = int(alterar_abs_match.group(1))
-        # Chamar função que faz o POST para alterar K29 na planilha
-        await alterar_celula_no_gs("K29", valor)
-        await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    # --- COMANDOS DE LIGAR/DESLIGAR ALARMES ---
-
-    # Ligar alarmes (H29 e I29 = 1)
-    if any(p in msg for p in ["ligar alarmes"]):
-        await alterar_celulas_no_gs({"H29": 1, "I29": 1})
-        await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    # Desligar alarmes (H29 e I29 = 2)
-    if any(p in msg for p in ["desligar alarmes"]):
-        await alterar_celulas_no_gs({"H29": 2, "I29": 2})
-        await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    # Ligar Nivel (H29 = 1)
-    if any(p in msg for p in ["ligar nivel", "ligar alarme nivel", "ligar alarme de nivel"]):
-        await alterar_celula_no_gs("H29", 1)
-        await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    # Desligar Nivel (H29 = 2)
-    if any(p in msg for p in ["desligar nivel", "desligar alarme nivel", "desligar alarme de nivel"]):
-        await alterar_celula_no_gs("H29", 2)
-        await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    # Ligar ABS (I29 = 1)
-    if any(p in msg for p in ["ligar abs", "ligar alarme abs", "ligar alarme de abs"]):
-        await alterar_celula_no_gs("I29", 1)
-        await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    # Desligar ABS (I29 = 2)
-    if any(p in msg for p in ["desligar abs", "desligar alarme abs", "desligar alarme de abs"]):
-        await alterar_celula_no_gs("I29", 2)
-        await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    # --- COMANDOS INFORMATIVOS (mais genéricos) ---
-
-    if any(p in msg for p in ["nível alarmes", "nivel alarmes", "niveis alarmes", "niveis dos alarmes", "níveis dos alarmes"]):
+    if "nível alarmes" in msg or "nivel alarmes" in msg:
         resposta = (
             f"{cumprimento}, {usuario}!\n"
             "Os níveis para os Alarmes são:\n"
@@ -101,7 +117,7 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(resposta)
         return
 
-    if any(p in msg for p in ["alarm", "alarme", "alarmes", "aviso", "avisos", "status dos alarmes"]):
+    if "alarm" in msg or "alarme" in msg or "avisos" in msg:
         resposta = (
             f"{cumprimento}, {usuario}!\n"
             f"O status dos Alarmes é:\n"
@@ -111,45 +127,41 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(resposta)
         return
 
-    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nível", "nível atual"]):
-        if nivel is not None:
-            resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%"
-        else:
-            resposta = f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
+    if "nível" in msg or "nivel" in msg:
+        resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
         await update.message.reply_text(resposta)
         return
 
-    if any(p in msg for p in ["qual o abs", "abs?", "abs", "abastecimento", "status do abastecimento"]):
-        if abastecimento is not None:
-            resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
-        else:
-            resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
+    if "abs" in msg or "abastecimento" in msg:
+        resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}" if abastecimento is not None else f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
         await update.message.reply_text(resposta)
         return
 
-    if any(p in msg for p in ["apresente-se", "apresenta-se", "apresentar", "se mostrar"]):
+    if "apresente" in msg:
         resposta = (
             f"{cumprimento}, {usuario}!\n\n"
-            "Eu sou a @Mel, a assistente do Sensor de Nível. "
-            "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
-            "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
-            "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
-            "E para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
-            "Pronto facinho né? Vamos tentar?"
+            "Eu sou a @Mel, a assistente do Sensor de Nível.\n"
+            "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água."
         )
         await update.message.reply_text(resposta)
         return
 
-    # Resposta padrão
+    # Padrão
     await update.message.reply_text(f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso...")
 
-# Funções de alteração na planilha, exemplo (você deve implementar as funções reais)
-async def alterar_celula_no_gs(celula, valor):
-    # Implemente a requisição POST para alterar a célula específica na planilha
-    # Por exemplo: requests.post(url, json={"celula": celula, "valor": valor})
-    pass
+# ---------------------- Main ----------------------
 
-async def alterar_celulas_no_gs(dic_celulas_valores):
-    # Implemente a requisição POST para alterar várias células ao mesmo tempo
-    pass
+def main():
+    token = os.getenv("BOT_TOKEN")
+    if not token:
+        print("ERRO: Defina a variável de ambiente BOT_TOKEN com o token do bot Telegram.")
+        return
 
+    app = ApplicationBuilder().token(token).build()
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
+
+    print("Bot @Mel rodando...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
