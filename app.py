@@ -17,52 +17,71 @@ def cumprimento_por_horario():
     else:
         return "Boa noite"
 
+def extrair_valor(texto):
+    try:
+        return texto.split(":")[-1].strip()
+    except:
+        return None
+
 def responder(update: Update, context: CallbackContext):
     msg = update.message.text.lower()
     usuario = update.message.from_user.first_name
 
     if "@mel" not in msg:
-        return
+        return  # Responde só se mencionar @Mel
 
     cumprimento = cumprimento_por_horario()
 
-    # Busca os dados do Google Sheets
     try:
         response = requests.get(GOOGLE_SHEETS_URL)
         dados = response.json()
+
         nivel = dados.get("nivel")
         abastecimento = dados.get("abastecimento")
-        h = dados.get("h", "").split(":")[-1].strip()  # H29 - Alarme Nível
-        i = dados.get("i", "").split(":")[-1].strip()  # I29 - Alarme ABS
-        j = dados.get("j", "").split(":")[-1].strip()  # J29 - Nível Alarme
-        k = dados.get("k", "").split(":")[-1].strip()  # K29 - Nível ABS
+
+        # Extrai os alarmes e níveis
+        h = extrair_valor(dados.get("h", ""))
+        i = extrair_valor(dados.get("i", ""))
+        j = extrair_valor(dados.get("j", ""))
+        k = extrair_valor(dados.get("k", ""))
     except Exception:
         nivel = abastecimento = h = i = j = k = None
 
-    # Comando: apresentação
-    if any(p in msg for p in ["apresente-se", "apresenta-se", "apresentar", "se mostrar"]):
+    # Comando: Alarmes
+    if any(p in msg for p in ["alarm", "alarme", "alarmes", "aviso", "avisos", "status dos alarmes", "status alarme"]):
+        status_nivel = "Ligado" if h == "1" else "Desligado" if h == "2" else "Indefinido"
+        status_abs = "Ligado" if i == "1" else "Desligado" if i == "2" else "Indefinido"
+
         resposta = (
-            f"{cumprimento}, {usuario}!\n\n"
-            "Eu sou a @Mel, a assistente do Sensor de Nível.\n"
-            "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
-            "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
-            "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
-            "E para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
-            "Pronto facinho né? Vamos tentar?"
+            f"{cumprimento}, {usuario}!\n"
+            f"O status dos Alarmes é:\n"
+            f"Alarme Nível: {status_nivel}\n"
+            f"Alarme ABS: {status_abs}"
         )
         update.message.reply_text(resposta)
         return
 
-    # Comando: nível
+    # Comando: Níveis dos Alarmes
+    if any(p in msg for p in ["nivel alarmes", "nível alarmes", "niveis alarmes", "níveis alarmes", "níveis dos alarmes", "niveis dos alarmes"]):
+        resposta = (
+            "Os níveis para os Alarmes são:\n"
+            f"Alarme Nível: {j}%\n"
+            f"Alarme ABS: {k}%"
+        )
+        update.message.reply_text(resposta)
+        return
+
+    # Comando: Qual o nível
     if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nivel?", "nível", "nível atual"]):
         if nivel is not None:
+            nivel = int(float(nivel))
             resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%"
         else:
             resposta = f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
         update.message.reply_text(resposta)
         return
 
-    # Comando: abastecimento
+    # Comando: Qual o abs
     if any(p in msg for p in ["qual o abs", "abs?", "abs", "abastecimento", "status do abastecimento"]):
         if abastecimento is not None:
             resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
@@ -71,7 +90,7 @@ def responder(update: Update, context: CallbackContext):
         update.message.reply_text(resposta)
         return
 
-    # Comando: links
+    # Comando: Links
     if any(p in msg for p in ["me mande os links", "link", "links", "os links", "sites", "os sites"]):
         resposta = (
             "O link do nível da caixa é:\n"
@@ -82,30 +101,7 @@ def responder(update: Update, context: CallbackContext):
         update.message.reply_text(resposta)
         return
 
-    # Comando: status dos alarmes
-    if any(p in msg for p in ["alarme", "alarmes", "aviso", "avisos", "status dos alarmes", "status dos avisos"]):
-        status_nivel = "Ligado" if h == "1" else "Desligado" if h == "2" else "Indefinido"
-        status_abs = "Ligado" if i == "1" else "Desligado" if i == "2" else "Indefinido"
-        resposta = (
-            f"{cumprimento}, {usuario}!\n"
-            "O status dos Alarmes é:\n"
-            f"Alarme Nível: {status_nivel}\n"
-            f"Alarme ABS: {status_abs}"
-        )
-        update.message.reply_text(resposta)
-        return
-
-    # Comando: níveis dos alarmes
-    if any(p in msg for p in ["nível alarmes", "nivel alarmes", "niveis alarmes", "níveis alarmes", "níveis dos alarmes", "niveis dos alarmes"]):
-        resposta = (
-            "Os níveis para os Alarmes são:\n"
-            f"Alarme Nível: {j}%\n"
-            f"Alarme ABS: {k}%"
-        )
-        update.message.reply_text(resposta)
-        return
-
-    # Se nenhum comando reconhecido
+    # Caso nenhum comando seja reconhecido
     update.message.reply_text(f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso...")
 
 def main():
