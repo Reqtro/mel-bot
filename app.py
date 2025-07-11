@@ -57,19 +57,12 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(resposta)
         return
 
-    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nível", "nível atual"]):
-        if nivel is not None:
-            resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%"
-        else:
-            resposta = f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
-        await update.message.reply_text(resposta)
-        return
-
-    if any(p in msg for p in ["qual o abs", "abs?", "abs", "abastecimento", "status do abastecimento"]):
-        if abastecimento is not None:
-            resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
-        else:
-            resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
+    if any(p in msg for p in ["nível alarmes", "nivel alarmes", "niveis alarmes", "niveis dos alarmes", "níveis dos alarmes"]):
+        resposta = (
+            "Os níveis para os Alarmes são:\n"
+            f"Alarme Nível: {j}%\n"
+            f"Alarme ABS: {k}%"
+        )
         await update.message.reply_text(resposta)
         return
 
@@ -83,12 +76,19 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(resposta)
         return
 
-    if any(p in msg for p in ["nível alarmes", "nivel alarmes", "niveis alarmes", "niveis dos alarmes", "níveis dos alarmes"]):
-        resposta = (
-            "Os níveis para os Alarmes são:\n"
-            f"Alarme Nível: {j}%\n"
-            f"Alarme ABS: {k}%"
-        )
+    if any(p in msg for p in ["qual o nível", "qual o nivel", "nível?", "nivel", "nível", "nível atual"]):
+        if nivel is not None:
+            resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%"
+        else:
+            resposta = f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
+        await update.message.reply_text(resposta)
+        return
+
+    if any(p in msg for p in ["qual o abs", "abs?", "abs", "abastecimento", "status do abastecimento"]):
+        if abastecimento is not None:
+            resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
+        else:
+            resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
         await update.message.reply_text(resposta)
         return
 
