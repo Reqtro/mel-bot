@@ -111,21 +111,14 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nivel = dados.get("nivel")
         abastecimento = dados.get("abastecimento")
 
-        h = int(dados.get("h", "0").split(":")[-1].strip())
-        i = int(dados.get("i", "0").split(":")[-1].strip())
-        j = int(dados.get("j", "0").split(":")[-1].strip())
-        k = int(dados.get("k", "0").split(":")[-1].strip())
+        h = int(dados.get("alarmeN", 0))
+        i = int(dados.get("alarmeAbs", 0))
+        j = dados.get("J29", None)  # se J29 não vier no JSON, fica None
+        k = dados.get("K29", None)
     except Exception as e:
         print(f"Erro ao buscar planilha: {e}")
         nivel = abastecimento = h = i = j = k = None
-
-    if "nível alarmes" in msg or "nivel alarmes" in msg:
-        resposta = (
-            f"{cumprimento}, {usuario}!\n"
-            "Os níveis para os Alarmes são:\n"
-            f"Alarme Nível: {j}%\n"
-            f"Alarme ABS: {k}%"
-        )
+        
         await update.message.reply_text(resposta)
         return
 
@@ -158,11 +151,9 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
     "Para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
     "Para saber qual é o status dos alarmes, é só me chamar assim: \"@Mel alarme\"\n"
-    "Para saber quais são os níveis definidos para acionamento dos alarmes, me chame assim: \"@Mel nivel alarmes\"\n"
     "Para modificar o status dos alarmes, pode me chamar assim: \"@Mel ligar alarmes\" ou \"@Mel desligar alarmes\", "
     "também \"@Mel ligar alarme de nivel\" ou ainda \"@Mel desligar alarme de abs\"\n"
-    "E para modificar o nível de acionamento dos alarmes, é só me chamar assim: \"@Mel alterar alarme de nivel 45\" "
-    "ou \"@Mel alterar alarme de abs 60\"\n"
+
     "Pronto, facinho né? Vamos tentar?"
         )
         await update.message.reply_text(resposta)
