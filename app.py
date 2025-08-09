@@ -154,9 +154,9 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "abs" in msg or "abastecimento" in msg:
         # Garante que sempre vai ter resposta inicial
         if abastecimento is not None:
-        resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
+           resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
         else:
-        resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
+           resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
 
         # Adiciona Última Atualização se existir
         ultima_atualizacao = dados.get("ultimaAtualizacao", None)
