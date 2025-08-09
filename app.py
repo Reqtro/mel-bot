@@ -150,7 +150,7 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         await update.message.reply_text(resposta)
         return
-
+        
     if "abs" in msg or "abastecimento" in msg:
     # Garante que sempre vai ter resposta inicial
     if abastecimento is not None:
@@ -172,7 +172,7 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(resposta)
     return
-
+    
     if "apresente" in msg:
         resposta = (
             f"{cumprimento}, {usuario}!\n\n"
