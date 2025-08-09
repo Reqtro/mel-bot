@@ -152,9 +152,13 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if "abs" in msg or "abastecimento" in msg:
-        resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}" if abastecimento is not None else f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
-        
-         # Pega e formata ultimaAtualizacao
+    # Garante que sempre vai ter resposta inicial
+    if abastecimento is not None:
+        resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
+    else:
+        resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
+
+    # Adiciona Última Atualização se existir
     ultima_atualizacao = dados.get("ultimaAtualizacao", None)
     if ultima_atualizacao:
         try:
@@ -165,9 +169,9 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Erro ao formatar data: {e}")
             resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
-            
-        await update.message.reply_text(resposta)
-        return
+
+    await update.message.reply_text(resposta)
+    return
 
     if "apresente" in msg:
         resposta = (
