@@ -135,13 +135,18 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "nível" in msg or "nivel" in msg:
         resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
         
-        # Busca a última atualização (H34 da aba 'Graficos')
+        # Pega e formata ultimaAtualizacao
+    ultima_atualizacao = dados.get("ultimaAtualizacao", None)
+    if ultima_atualizacao:
         try:
-            ultima_atualizacao = dados.get("H34", None)
-            if ultima_atualizacao is not None:
-                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+            # Converte para datetime no fuso de SP
+            dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
+            dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
+            ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
+            resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
         except Exception as e:
-            print(f"Erro ao obter H34: {e}")
+            print(f"Erro ao formatar data: {e}")
+            resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
             
         await update.message.reply_text(resposta)
         return
@@ -149,13 +154,17 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "abs" in msg or "abastecimento" in msg:
         resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}" if abastecimento is not None else f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
         
-         # Busca a última atualização (H34 da aba 'Graficos')
+         # Pega e formata ultimaAtualizacao
+    ultima_atualizacao = dados.get("ultimaAtualizacao", None)
+    if ultima_atualizacao:
         try:
-            ultima_atualizacao = dados.get("H34", None)
-            if ultima_atualizacao is not None:
-                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+            dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
+            dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
+            ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
+            resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
         except Exception as e:
-            print(f"Erro ao obter H34: {e}")
+            print(f"Erro ao formatar data: {e}")
+            resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
             
         await update.message.reply_text(resposta)
         return
