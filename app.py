@@ -134,11 +134,29 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if "nível" in msg or "nivel" in msg:
         resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
+        
+        # Busca a última atualização (H34 da aba 'Graficos')
+        try:
+            ultima_atualizacao = dados.get("H34", None)
+            if ultima_atualizacao is not None:
+                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+        except Exception as e:
+            print(f"Erro ao obter H34: {e}")
+            
         await update.message.reply_text(resposta)
         return
 
     if "abs" in msg or "abastecimento" in msg:
         resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}" if abastecimento is not None else f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
+        
+         # Busca a última atualização (H34 da aba 'Graficos')
+        try:
+            ultima_atualizacao = dados.get("H34", None)
+            if ultima_atualizacao is not None:
+                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+        except Exception as e:
+            print(f"Erro ao obter H34: {e}")
+            
         await update.message.reply_text(resposta)
         return
 
