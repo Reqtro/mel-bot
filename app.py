@@ -129,17 +129,16 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Alarme Nível: {'Ligado' if h == 1 else 'Desligado'}\n"
             f"Alarme ABS: {'Ligado' if i == 1 else 'Desligado'}"
         )
-        await update.message.reply_text(resposta)
-        return
+     await update.message.reply_text(resposta)
+     return
 
-    if "nível" in msg or "nivel" in msg:
-        resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
-        
-        # Pega e formata ultimaAtualizacao
+     if "nível" in msg or "nivel" in msg:
+         resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
+    
+    # Pega e formata ultimaAtualizacao dentro do mesmo bloco
     ultima_atualizacao = dados.get("ultimaAtualizacao", None)
     if ultima_atualizacao:
         try:
-            # Converte para datetime no fuso de SP
             dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
             dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
             ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
@@ -147,10 +146,10 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Erro ao formatar data: {e}")
             resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
-            
-        await update.message.reply_text(resposta)
-        return
-        
+    
+    await update.message.reply_text(resposta)
+    return
+
     if "abs" in msg or "abastecimento" in msg:
         # Garante que sempre vai ter resposta inicial
         if abastecimento is not None:
@@ -166,13 +165,13 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
                dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
                ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
                resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
-           except Exception as e:
-               print(f"Erro ao formatar data: {e}")
-               resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+        except Exception as e:
+            print(f"Erro ao formatar data: {e}")
+            resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
 
     await update.message.reply_text(resposta)
     return
-    
+
     if "apresente" in msg:
         resposta = (
             f"{cumprimento}, {usuario}!\n\n"
