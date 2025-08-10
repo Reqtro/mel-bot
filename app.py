@@ -117,9 +117,7 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         k = dados.get("K29", None)
     except Exception as e:
         print(f"Erro ao buscar planilha: {e}")
-        nivel = abastecimento = h = i = j = k = None
-        
-        await update.message.reply_text(resposta)
+        await update.message.reply_text("Erro ao obter dados da planilha.")
         return
 
     if "alarm" in msg or "alarme" in msg or "avisos" in msg:
@@ -129,62 +127,61 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Alarme Nível: {'Ligado' if h == 1 else 'Desligado'}\n"
             f"Alarme ABS: {'Ligado' if i == 1 else 'Desligado'}"
         )
-     await update.message.reply_text(resposta)
-     return
+        await update.message.reply_text(resposta)
+        return
 
-     if "nível" in msg or "nivel" in msg:
-         resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
-    
-    # Pega e formata ultimaAtualizacao dentro do mesmo bloco
-    ultima_atualizacao = dados.get("ultimaAtualizacao", None)
-    if ultima_atualizacao:
-        try:
-            dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
-            dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
-            ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
-            resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
-        except Exception as e:
-            print(f"Erro ao formatar data: {e}")
-            resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
-    
-    await update.message.reply_text(resposta)
-    return
+    if "nível" in msg or "nivel" in msg:
+        resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
+
+        # Pega e formata ultimaAtualizacao dentro do mesmo bloco
+        ultima_atualizacao = dados.get("ultimaAtualizacao", None)
+        if ultima_atualizacao:
+            try:
+                dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
+                dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
+                ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
+                resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
+            except Exception as e:
+                print(f"Erro ao formatar data: {e}")
+                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+
+        await update.message.reply_text(resposta)
+        return
 
     if "abs" in msg or "abastecimento" in msg:
         # Garante que sempre vai ter resposta inicial
         if abastecimento is not None:
-           resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
+            resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
         else:
-           resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
+            resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
 
         # Adiciona Última Atualização se existir
         ultima_atualizacao = dados.get("ultimaAtualizacao", None)
         if ultima_atualizacao:
-           try:
-               dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
-               dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
-               ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
-               resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
-        except Exception as e:
-            print(f"Erro ao formatar data: {e}")
-            resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+            try:
+                dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
+                dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
+                ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
+                resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
+            except Exception as e:
+                print(f"Erro ao formatar data: {e}")
+                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
 
-    await update.message.reply_text(resposta)
-    return
+        await update.message.reply_text(resposta)
+        return
 
     if "apresente" in msg:
         resposta = (
             f"{cumprimento}, {usuario}!\n\n"
-    "Eu sou a @Mel, a assistente do Sensor de Nível. "
-    "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
-    "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
-    "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
-    "Para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
-    "Para saber qual é o status dos alarmes, é só me chamar assim: \"@Mel alarme\"\n"
-    "Para modificar o status dos alarmes, pode me chamar assim: \"@Mel ligar alarmes\" ou \"@Mel desligar alarmes\", "
-    "também \"@Mel ligar alarme de nivel\" ou ainda \"@Mel desligar alarme de abs\"\n"
-
-    "Pronto, facinho né? Vamos tentar?"
+            "Eu sou a @Mel, a assistente do Sensor de Nível. "
+            "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
+            "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
+            "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
+            "Para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
+            "Para saber qual é o status dos alarmes, é só me chamar assim: \"@Mel alarme\"\n"
+            "Para modificar o status dos alarmes, pode me chamar assim: \"@Mel ligar alarmes\" ou \"@Mel desligar alarmes\", "
+            "também \"@Mel ligar alarme de nivel\" ou ainda \"@Mel desligar alarme de abs\"\n"
+            "Pronto, facinho né? Vamos tentar?"
         )
         await update.message.reply_text(resposta)
         return
