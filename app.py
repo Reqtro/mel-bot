@@ -1,13 +1,22 @@
 import os
 import re
-import requests
-from datetime import datetime
+import asyncio
+import aiohttp
+from datetime import datetime, timedelta
 import pytz
-
+from typing import Optional, Dict, Any
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
 GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbyHjLESxkcUWO3yAy0rdDJrvWi5zRJ4rqqiHpRg1-n4Os0dSb0Y4Rmuu_xifWOKeg37/exec"
+
+# Cache para armazenar dados temporariamente
+dados_cache: Dict[str, Any] = {}
+cache_timestamp: Optional[datetime] = None
+CACHE_DURATION = 30  # segundos
+
+# Sessão HTTP global (mais eficiente)
+session: Optional[aiohttp.ClientSession] = None
 
 # ---------------------- Funções Auxiliares ----------------------
 def cumprimento_por_horario():
@@ -20,29 +29,87 @@ def cumprimento_por_horario():
     else:
         return "Boa noite"
 
-async def alterar_celula_no_gs(celula, valor):
-    try:
-        # Envia JSON com chave setGrafico para alterar célula única
-        payload = {
-            "setGrafico": {
-                "celula": celula,
-                "valor": valor
-            }
-        }
-        requests.post(GOOGLE_SHEETS_URL, json=payload, timeout=5)
-    except Exception as e:
-        print(f"Erro ao enviar POST: {e}")
+async def get_session() -> aiohttp.ClientSession:
+    """Obtém ou cria uma sessão HTTP assíncrona"""
+    global session
+    if session is None or session.closed:
+        timeout = aiohttp.ClientTimeout(total=10)  # Timeout de 10 segundos
+        session = aiohttp.ClientSession(timeout=timeout)
+    return session
 
-async def alterar_celulas_no_gs(dic_celulas_valores):
+async def fetch_google_sheets_data(force_refresh: bool = False) -> Optional[Dict]:
+    """Busca dados do Google Sheets com cache"""
+    global dados_cache, cache_timestamp
+    
+    # Verifica se o cache é válido
+    if (not force_refresh and cache_timestamp and 
+        datetime.now() - cache_timestamp < timedelta(seconds=CACHE_DURATION)):
+        return dados_cache
+    
     try:
-        # Monta lista para multiplas alterações
-        alteracoes = [{"celula": c, "valor": v} for c, v in dic_celulas_valores.items()]
-        payload = {
-            "multiplosGraficos": alteracoes
-        }
-        requests.post(GOOGLE_SHEETS_URL, json=payload, timeout=5)
+        session = await get_session()
+        async with session.get(GOOGLE_SHEETS_URL, timeout=10) as response:
+            if response.status == 200:
+                dados = await response.json()
+                # Atualiza cache
+                dados_cache = dados
+                cache_timestamp = datetime.now()
+                return dados
+            else:
+                print(f"Erro HTTP {response.status} ao buscar planilha")
+                # Retorna cache se disponível, mesmo que antigo
+                return dados_cache if dados_cache else None
+    except asyncio.TimeoutError:
+        print("Timeout ao buscar dados do Google Sheets")
+        return dados_cache if dados_cache else None
     except Exception as e:
-        print(f"Erro ao enviar POST: {e}")
+        print(f"Erro ao buscar planilha: {e}")
+        return dados_cache if dados_cache else None
+
+async def alterar_celula_no_gs(celula: str, valor: int) -> bool:
+    """Altera uma célula no Google Sheets de forma assíncrona"""
+    try:
+        session = await get_session()
+        payload = {"setGrafico": {"celula": celula, "valor": valor}}
+        
+        async with session.post(GOOGLE_SHEETS_URL, json=payload, timeout=10) as response:
+            if response.status == 200:
+                # Invalida o cache após alteração
+                global cache_timestamp
+                cache_timestamp = None
+                return True
+            else:
+                print(f"Erro HTTP {response.status} ao alterar célula")
+                return False
+    except asyncio.TimeoutError:
+        print("Timeout ao alterar célula")
+        return False
+    except Exception as e:
+        print(f"Erro ao alterar célula: {e}")
+        return False
+
+async def alterar_celulas_no_gs(dic_celulas_valores: Dict[str, int]) -> bool:
+    """Altera múltiplas células no Google Sheets de forma assíncrona"""
+    try:
+        session = await get_session()
+        alteracoes = [{"celula": c, "valor": v} for c, v in dic_celulas_valores.items()]
+        payload = {"multiplosGraficos": alteracoes}
+        
+        async with session.post(GOOGLE_SHEETS_URL, json=payload, timeout=10) as response:
+            if response.status == 200:
+                # Invalida o cache após alteração
+                global cache_timestamp
+                cache_timestamp = None
+                return True
+            else:
+                print(f"Erro HTTP {response.status} ao alterar células")
+                return False
+    except asyncio.TimeoutError:
+        print("Timeout ao alterar células")
+        return False
+    except Exception as e:
+        print(f"Erro ao alterar células: {e}")
+        return False
 
 # ---------------------- Função Principal ----------------------
 
@@ -54,6 +121,9 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     cumprimento = cumprimento_por_horario()
+    
+    # Responde imediatamente com "processando" para feedback rápido
+    processing_msg = await update.message.reply_text("🔄 Processando...")
 
     # ------------------ Comandos de Alteração ------------------
 
@@ -62,161 +132,169 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if match_nivel:
         valor = int(match_nivel.group(4))
-        await alterar_celula_no_gs("J29", valor)
-        await update.message.reply_text("Alteração realizada como desejado!")
+        sucesso = await alterar_celula_no_gs("J29", valor)
+        await processing_msg.delete()
+        resposta = "Alteração realizada como desejado!" if sucesso else "Erro ao realizar alteração. Tente novamente."
+        await update.message.reply_text(resposta)
         return
 
     if match_abs:
         valor = int(match_abs.group(4))
-        await alterar_celula_no_gs("K29", valor)
-        await update.message.reply_text("Alteração realizada como desejado!")
+        sucesso = await alterar_celula_no_gs("K29", valor)
+        await processing_msg.delete()
+        resposta = "Alteração realizada como desejado!" if sucesso else "Erro ao realizar alteração. Tente novamente."
+        await update.message.reply_text(resposta)
         return
 
     if "ligar alarmes" in msg:
-        await alterar_celulas_no_gs({"H29": 1, "I29": 1})
-        await update.message.reply_text("Alteração realizada como desejado!")
+        sucesso = await alterar_celulas_no_gs({"H29": 1, "I29": 1})
+        await processing_msg.delete()
+        resposta = "Alteração realizada como desejado!" if sucesso else "Erro ao realizar alteração. Tente novamente."
+        await update.message.reply_text(resposta)
         return
 
     if "desligar alarmes" in msg:
-        await alterar_celulas_no_gs({"H29": 2, "I29": 2})
-        await update.message.reply_text("Alteração realizada como desejado!")
+        sucesso = await alterar_celulas_no_gs({"H29": 2, "I29": 2})
+        await processing_msg.delete()
+        resposta = "Alteração realizada como desejado!" if sucesso else "Erro ao realizar alteração. Tente novamente."
+        await update.message.reply_text(resposta)
         return
 
     if re.search(r"ligar (alarme )?(de )?nivel", msg):
-        await alterar_celula_no_gs("H29", 1)
-        await update.message.reply_text("Alteração realizada como desejado!")
+        sucesso = await alterar_celula_no_gs("H29", 1)
+        await processing_msg.delete()
+        resposta = "Alteração realizada como desejado!" if sucesso else "Erro ao realizar alteração. Tente novamente."
+        await update.message.reply_text(resposta)
         return
 
     if re.search(r"desligar (alarme )?(de )?nivel", msg):
-        await alterar_celula_no_gs("H29", 2)
-        await update.message.reply_text("Alteração realizada como desejado!")
+        sucesso = await alterar_celula_no_gs("H29", 2)
+        await processing_msg.delete()
+        resposta = "Alteração realizada como desejado!" if sucesso else "Erro ao realizar alteração. Tente novamente."
+        await update.message.reply_text(resposta)
         return
 
     if re.search(r"ligar (alarme )?(de )?abs", msg):
-        await alterar_celula_no_gs("I29", 1)
-        await update.message.reply_text("Alteração realizada como desejado!")
+        sucesso = await alterar_celula_no_gs("I29", 1)
+        await processing_msg.delete()
+        resposta = "Alteração realizada como desejado!" if sucesso else "Erro ao realizar alteração. Tente novamente."
+        await update.message.reply_text(resposta)
         return
 
     if re.search(r"desligar (alarme )?(de )?abs", msg):
-        await alterar_celula_no_gs("I29", 2)
-        await update.message.reply_text("Alteração realizada como desejado!")
+        sucesso = await alterar_celula_no_gs("I29", 2)
+        await processing_msg.delete()
+        resposta = "Alteração realizada como desejado!" if sucesso else "Erro ao realizar alteração. Tente novamente."
+        await update.message.reply_text(resposta)
         return
 
     # ------------------ Comandos de Consulta ------------------
 
-    try:
-        response = requests.get(GOOGLE_SHEETS_URL, timeout=5)
-        dados = response.json()
-
-        nivel = dados.get("nivel")
-        abastecimento = dados.get("abastecimento")
-
-        h = int(dados.get("alarmeN", 0))
-        i = int(dados.get("alarmeAbs", 0))
-        j = dados.get("J29", None)  # se J29 não vier no JSON, fica None
-        k = dados.get("K29", None)
-    except Exception as e:
-        print(f"Erro ao buscar planilha: {e}")
-        await update.message.reply_text("Erro ao obter dados da planilha.")
+    # Busca dados (com cache)
+    dados = await fetch_google_sheets_data()
+    
+    if dados is None:
+        await processing_msg.delete()
+        await update.message.reply_text("⚠️ Erro ao obter dados da planilha. Tente novamente.")
         return
+
+    nivel = dados.get("nivel")
+    abastecimento = dados.get("abastecimento")
+    h = int(dados.get("alarmeN", 0))
+    i = int(dados.get("alarmeAbs", 0))
 
     if "alarm" in msg or "alarme" in msg or "avisos" in msg:
         resposta = (
             f"{cumprimento}, {usuario}!\n"
             f"O status dos Alarmes é:\n"
-            f"Alarme Nível: {'Ligado' if h == 1 else 'Desligado'}\n"
-            f"Alarme ABS: {'Ligado' if i == 1 else 'Desligado'}"
+            f"Alarme Nível: {'✅ Ligado' if h == 1 else '❌ Desligado'}\n"
+            f"Alarme ABS: {'✅ Ligado' if i == 1 else '❌ Desligado'}"
         )
+        await processing_msg.delete()
         await update.message.reply_text(resposta)
         return
 
-    # VERIFICAÇÃO DE "abs" PRIMEIRO, ANTES DE "nivel"
-    # Usando regex para capturar "abs" como palavra completa
+    # VERIFICAÇÃO DE "abs" 
     if re.search(r'\babs\b', msg):
-        # Garante que sempre vai ter resposta inicial
         if abastecimento is not None:
             resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
         else:
             resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
 
-        # Adiciona Última Atualização se existir
-        ultima_atualizacao = dados.get("ultimaAtualizacao", None)
+        ultima_atualizacao = dados.get("ultimaAtualizacao")
         if ultima_atualizacao:
             try:
                 dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
                 dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
                 ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
-                resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
-            except Exception as e:
-                print(f"Erro ao formatar data: {e}")
-                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+                resposta += f"\n\n🕐 Última Atualização:\n{ultima_formatada}"
+            except Exception:
+                resposta += f"\n\n🕐 Última Atualização:\n{ultima_atualizacao}"
 
+        await processing_msg.delete()
         await update.message.reply_text(resposta)
         return
 
-    # Também corrigido para "nivel" como palavra completa
+    # Verificação de "nivel"
     if re.search(r'\bnivel\b', msg) or "nível" in msg:
         resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
 
-        # Pega e formata ultimaAtualizacao dentro do mesmo bloco
-        ultima_atualizacao = dados.get("ultimaAtualizacao", None)
+        ultima_atualizacao = dados.get("ultimaAtualizacao")
         if ultima_atualizacao:
             try:
                 dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
                 dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
                 ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
-                resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
-            except Exception as e:
-                print(f"Erro ao formatar data: {e}")
-                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+                resposta += f"\n\n🕐 Última Atualização:\n{ultima_formatada}"
+            except Exception:
+                resposta += f"\n\n🕐 Última Atualização:\n{ultima_atualizacao}"
 
+        await processing_msg.delete()
         await update.message.reply_text(resposta)
         return
 
     if "abastecimento" in msg:
-        # Garante que sempre vai ter resposta inicial
         if abastecimento is not None:
             resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
         else:
             resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
 
-        # Adiciona Última Atualização se existir
-        ultima_atualizacao = dados.get("ultimaAtualizacao", None)
+        ultima_atualizacao = dados.get("ultimaAtualizacao")
         if ultima_atualizacao:
             try:
                 dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
                 dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
                 ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
-                resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
-            except Exception as e:
-                print(f"Erro ao formatar data: {e}")
-                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+                resposta += f"\n\n🕐 Última Atualização:\n{ultima_formatada}"
+            except Exception:
+                resposta += f"\n\n🕐 Última Atualização:\n{ultima_atualizacao}"
 
+        await processing_msg.delete()
         await update.message.reply_text(resposta)
         return
 
     if "apresente" in msg:
         resposta = (
             f"{cumprimento}, {usuario}!\n\n"
-            "Eu sou a @Mel, a assistente do Sensor de Nível. "
+            "🤖 Eu sou a @Mel, a assistente do Sensor de Nível.\n"
             "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
-            "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
-            "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
-            "Para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
-            "Para saber qual é o status dos alarmes, é só me chamar assim: \"@Mel alarme\"\n"
-            "Para modificar o status dos alarmes, pode me chamar assim: \"@Mel ligar alarmes\" ou \"@Mel desligar alarmes\", "
-            "também \"@Mel ligar alarme de nivel\" ou ainda \"@Mel desligar alarme de abs\"\n"
-            "Pronto, facinho né? Vamos tentar?"
+            "💧 **Nível de água**: \"@Mel qual é o nível?\"\n"
+            "🚰 **Status do abastecimento**: \"@Mel qual é o abs?\"\n"
+            "🔔 **Status dos alarmes**: \"@Mel alarme\"\n"
+            "⚡ **Ligar/desligar alarmes**: \"@Mel ligar alarmes\" ou \"@Mel desligar alarmes\"\n\n"
+            "Pronto, facinho né? Vamos tentar? 😊"
         )
+        await processing_msg.delete()
         await update.message.reply_text(resposta)
         return
 
     # Padrão
+    await processing_msg.delete()
     await update.message.reply_text(f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso...")
 
 # ---------------------- Main ----------------------
 
-def main():
+async def main():
     token = os.getenv("BOT_TOKEN")
     if not token:
         print("ERRO: Defina a variável de ambiente BOT_TOKEN com o token do bot Telegram.")
@@ -226,7 +304,13 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT, responder))
 
     print("Bot @Mel rodando...")
-    app.run_polling()
+    
+    try:
+        await app.run_polling()
+    finally:
+        # Fecha a sessão HTTP ao encerrar
+        if session and not session.closed:
+            await session.close()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
