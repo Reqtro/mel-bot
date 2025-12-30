@@ -143,27 +143,20 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     token = os.getenv("BOT_TOKEN")
     if not token:
-        print("❌ ERRO: BOT_TOKEN não definido.")
+        print("ERRO: BOT_TOKEN não definido.")
         return
-
-    request = HTTPXRequest(
-        connect_timeout=60,
-        read_timeout=60,
-        write_timeout=60,
-        pool_timeout=60,
-    )
 
     app = (
         ApplicationBuilder()
         .token(token)
-        .request(request)
         .build()
     )
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
 
-    print("🤖 Bot @Mel rodando...")
+    print("Bot @Mel rodando...")
     app.run_polling(drop_pending_updates=True)
+
 
 # ====== ENTRY POINT ======
 if __name__ == "__main__":
