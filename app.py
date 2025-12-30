@@ -1,17 +1,27 @@
 import os
 import re
-import requests
 from datetime import datetime
+
 import pytz
+import httpx
 
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
+from telegram.ext import (
+    ApplicationBuilder,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
+from telegram.request import HTTPXRequest
+
 
 GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbyHjLESxkcUWO3yAy0rdDJrvWi5zRJ4rqqiHpRg1-n4Os0dSb0Y4Rmuu_xifWOKeg37/exec"
 
+
 # ---------------------- Funções Auxiliares ----------------------
+
 def cumprimento_por_horario():
-    tz = pytz.timezone('America/Sao_Paulo')
+    tz = pytz.timezone("America/Sao_Paulo")
     hora = datetime.now(tz).hour
     if 6 <= hora < 12:
         return "Bom dia"
@@ -20,33 +30,48 @@ def cumprimento_por_horario():
     else:
         return "Boa noite"
 
+
 async def alterar_celula_no_gs(celula, valor):
-    try:
-        # Envia JSON com chave setGrafico para alterar célula única
-        payload = {
-            "setGrafico": {
-                "celula": celula,
-                "valor": valor
-            }
+    payload = {
+        "setGrafico": {
+            "celula": celula,
+            "valor": valor
         }
-        requests.post(GOOGLE_SHEETS_URL, json=payload, timeout=5)
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(GOOGLE_SHEETS_URL, json=payload)
     except Exception as e:
-        print(f"Erro ao enviar POST: {e}")
+        print(f"Erro ao enviar POST (celula única): {e}")
+
 
 async def alterar_celulas_no_gs(dic_celulas_valores):
+    payload = {
+        "multiplosGraficos": [
+            {"celula": c, "valor": v}
+            for c, v in dic_celulas_valores.items()
+        ]
+    }
     try:
-        # Monta lista para multiplas alterações
-        alteracoes = [{"celula": c, "valor": v} for c, v in dic_celulas_valores.items()]
-        payload = {
-            "multiplosGraficos": alteracoes
-        }
-        requests.post(GOOGLE_SHEETS_URL, json=payload, timeout=5)
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(GOOGLE_SHEETS_URL, json=payload)
     except Exception as e:
-        print(f"Erro ao enviar POST: {e}")
+        print(f"Erro ao enviar POST (múltiplas células): {e}")
+
+
+async def obter_dados_planilha():
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.get(GOOGLE_SHEETS_URL)
+        response.raise_for_status()
+        return response.json()
+
 
 # ---------------------- Função Principal ----------------------
 
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
+
     msg = update.message.text.lower()
     usuario = update.message.from_user.first_name
 
@@ -105,22 +130,19 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ------------------ Comandos de Consulta ------------------
 
     try:
-        response = requests.get(GOOGLE_SHEETS_URL, timeout=5)
-        dados = response.json()
-
-        nivel = dados.get("nivel")
-        abastecimento = dados.get("abastecimento")
-
-        h = int(dados.get("alarmeN", 0))
-        i = int(dados.get("alarmeAbs", 0))
-        j = dados.get("J29", None)  # se J29 não vier no JSON, fica None
-        k = dados.get("K29", None)
+        dados = await obter_dados_planilha()
     except Exception as e:
         print(f"Erro ao buscar planilha: {e}")
         await update.message.reply_text("Erro ao obter dados da planilha.")
         return
 
-    if "alarm" in msg or "alarme" in msg or "avisos" in msg:
+    nivel = dados.get("nivel")
+    abastecimento = dados.get("abastecimento")
+    h = int(dados.get("alarmeN", 0))
+    i = int(dados.get("alarmeAbs", 0))
+    ultima_atualizacao = dados.get("ultimaAtualizacao")
+
+    if "alarme" in msg or "avisos" in msg:
         resposta = (
             f"{cumprimento}, {usuario}!\n"
             f"O status dos Alarmes é:\n"
@@ -130,78 +152,58 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(resposta)
         return
 
-    if "nível" in msg or "nivel" in msg:
-        resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
-
-        # Pega e formata ultimaAtualizacao dentro do mesmo bloco
-        ultima_atualizacao = dados.get("ultimaAtualizacao", None)
-        if ultima_atualizacao:
-            try:
-                dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
-                dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
-                ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
-                resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
-            except Exception as e:
-                print(f"Erro ao formatar data: {e}")
-                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
-
-        await update.message.reply_text(resposta)
-        return
-
-    if "abs" in msg or "abastecimento" in msg:
-        # Garante que sempre vai ter resposta inicial
-        if abastecimento is not None:
-            resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
-        else:
-            resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
-
-        # Adiciona Última Atualização se existir
-        ultima_atualizacao = dados.get("ultimaAtualizacao", None)
-        if ultima_atualizacao:
-            try:
-                dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
-                dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
-                ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
-                resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
-            except Exception as e:
-                print(f"Erro ao formatar data: {e}")
-                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
-
-        await update.message.reply_text(resposta)
-        return
-
-    if "apresente" in msg:
+    if "nivel" in msg or "nível" in msg:
         resposta = (
-            f"{cumprimento}, {usuario}!\n\n"
-            "Eu sou a @Mel, a assistente do Sensor de Nível. "
-            "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
-            "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
-            "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
-            "Para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
-            "Para saber qual é o status dos alarmes, é só me chamar assim: \"@Mel alarme\"\n"
-            "Para modificar o status dos alarmes, pode me chamar assim: \"@Mel ligar alarmes\" ou \"@Mel desligar alarmes\", "
-            "também \"@Mel ligar alarme de nivel\" ou ainda \"@Mel desligar alarme de abs\"\n"
-            "Pronto, facinho né? Vamos tentar?"
+            f"{cumprimento}, {usuario}! O nível atual é: {nivel}%"
+            if nivel is not None
+            else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
         )
-        await update.message.reply_text(resposta)
-        return
 
-    # Padrão
-    await update.message.reply_text(f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso...")
+    elif "abs" in msg or "abastecimento" in msg:
+        resposta = (
+            f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
+            if abastecimento is not None
+            else f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
+        )
+    else:
+        resposta = f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso..."
+
+    if ultima_atualizacao:
+        try:
+            dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
+            dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
+            resposta += f"\n\nÚltima Atualização:\n{dt_sp.strftime('%d/%m/%Y %H:%M')}"
+        except Exception:
+            resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+
+    await update.message.reply_text(resposta)
+
 
 # ---------------------- Main ----------------------
 
 def main():
     token = os.getenv("BOT_TOKEN")
     if not token:
-        print("ERRO: Defina a variável de ambiente BOT_TOKEN com o token do bot Telegram.")
+        print("ERRO: Defina a variável de ambiente BOT_TOKEN.")
         return
 
-    app = ApplicationBuilder().token(token).build()
+    request = HTTPXRequest(
+        connect_timeout=30,
+        read_timeout=30,
+    )
+
+    app = (
+        ApplicationBuilder()
+        .token(token)
+        .request(request)
+        .build()
+    )
+
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
 
     print("Bot @Mel rodando...")
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
