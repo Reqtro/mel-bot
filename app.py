@@ -5,21 +5,13 @@ from datetime import datetime
 import pytz
 
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
-from telegram.request import HTTPXRequest
+from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
-# ================= CONFIG =================
 GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbyHjLESxkcUWO3yAy0rdDJrvWi5zRJ4rqqiHpRg1-n4Os0dSb0Y4Rmuu_xifWOKeg37/exec"
 
-# ============== FUNÇÕES AUXILIARES ==============
-
+# ---------------------- Funções Auxiliares ----------------------
 def cumprimento_por_horario():
-    tz = pytz.timezone("America/Sao_Paulo")
+    tz = pytz.timezone('America/Sao_Paulo')
     hora = datetime.now(tz).hour
     if 6 <= hora < 12:
         return "Bom dia"
@@ -28,136 +20,188 @@ def cumprimento_por_horario():
     else:
         return "Boa noite"
 
-
 async def alterar_celula_no_gs(celula, valor):
     try:
+        # Envia JSON com chave setGrafico para alterar célula única
         payload = {
             "setGrafico": {
                 "celula": celula,
                 "valor": valor
             }
         }
-        requests.post(GOOGLE_SHEETS_URL, json=payload, timeout=10)
+        requests.post(GOOGLE_SHEETS_URL, json=payload, timeout=5)
     except Exception as e:
-        print(f"Erro POST célula única: {e}")
-
+        print(f"Erro ao enviar POST: {e}")
 
 async def alterar_celulas_no_gs(dic_celulas_valores):
     try:
+        # Monta lista para multiplas alterações
         alteracoes = [{"celula": c, "valor": v} for c, v in dic_celulas_valores.items()]
-        payload = {"multiplosGraficos": alteracoes}
-        requests.post(GOOGLE_SHEETS_URL, json=payload, timeout=10)
+        payload = {
+            "multiplosGraficos": alteracoes
+        }
+        requests.post(GOOGLE_SHEETS_URL, json=payload, timeout=5)
     except Exception as e:
-        print(f"Erro POST múltiplas células: {e}")
+        print(f"Erro ao enviar POST: {e}")
 
-# ================= HANDLER =================
+# ---------------------- Função Principal ----------------------
 
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
-
     msg = update.message.text.lower()
     usuario = update.message.from_user.first_name
 
-    # Só responde se for chamado
     if "@mel" not in msg:
         return
 
     cumprimento = cumprimento_por_horario()
 
-    # -------- ALTERAÇÕES --------
-    match_nivel = re.search(r"(alterar|mudar).*(nivel|nível).*?(\d{1,3})", msg)
-    match_abs = re.search(r"(alterar|mudar).*(abs).*?(\d{1,3})", msg)
+    # ------------------ Comandos de Alteração ------------------
+
+    match_nivel = re.search(r"(alterar|mudar) (alarme )?(de )?nivel (\d{1,3})", msg)
+    match_abs = re.search(r"(alterar|mudar) (alarme )?(de )?abs (\d{1,3})", msg)
 
     if match_nivel:
-        valor = int(match_nivel.group(3))
+        valor = int(match_nivel.group(4))
         await alterar_celula_no_gs("J29", valor)
-        await update.message.reply_text("✅ Nível alterado com sucesso!")
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
 
     if match_abs:
-        valor = int(match_abs.group(3))
+        valor = int(match_abs.group(4))
         await alterar_celula_no_gs("K29", valor)
-        await update.message.reply_text("✅ ABS alterado com sucesso!")
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
 
     if "ligar alarmes" in msg:
         await alterar_celulas_no_gs({"H29": 1, "I29": 1})
-        await update.message.reply_text("🚨 Alarmes ligados!")
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
 
     if "desligar alarmes" in msg:
         await alterar_celulas_no_gs({"H29": 2, "I29": 2})
-        await update.message.reply_text("🔕 Alarmes desligados!")
+        await update.message.reply_text("Alteração realizada como desejado!")
         return
 
-    # -------- CONSULTAS --------
+    if re.search(r"ligar (alarme )?(de )?nivel", msg):
+        await alterar_celula_no_gs("H29", 1)
+        await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    if re.search(r"desligar (alarme )?(de )?nivel", msg):
+        await alterar_celula_no_gs("H29", 2)
+        await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    if re.search(r"ligar (alarme )?(de )?abs", msg):
+        await alterar_celula_no_gs("I29", 1)
+        await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    if re.search(r"desligar (alarme )?(de )?abs", msg):
+        await alterar_celula_no_gs("I29", 2)
+        await update.message.reply_text("Alteração realizada como desejado!")
+        return
+
+    # ------------------ Comandos de Consulta ------------------
+
     try:
-        response = requests.get(GOOGLE_SHEETS_URL, timeout=10)
+        response = requests.get(GOOGLE_SHEETS_URL, timeout=5)
         dados = response.json()
+
+        nivel = dados.get("nivel")
+        abastecimento = dados.get("abastecimento")
+
+        h = int(dados.get("alarmeN", 0))
+        i = int(dados.get("alarmeAbs", 0))
+        j = dados.get("J29", None)  # se J29 não vier no JSON, fica None
+        k = dados.get("K29", None)
     except Exception as e:
-        print(f"Erro GET planilha: {e}")
-        await update.message.reply_text("❌ Erro ao obter dados da planilha.")
+        print(f"Erro ao buscar planilha: {e}")
+        await update.message.reply_text("Erro ao obter dados da planilha.")
         return
 
-    nivel = dados.get("nivel")
-    abs_status = dados.get("abastecimento")
+    if "alarm" in msg or "alarme" in msg or "avisos" in msg:
+        resposta = (
+            f"{cumprimento}, {usuario}!\n"
+            f"O status dos Alarmes é:\n"
+            f"Alarme Nível: {'Ligado' if h == 1 else 'Desligado'}\n"
+            f"Alarme ABS: {'Ligado' if i == 1 else 'Desligado'}"
+        )
+        await update.message.reply_text(resposta)
+        return
 
-    if "nivel" in msg or "nível" in msg:
-        if nivel is not None:
-            resposta = f"{cumprimento}, {usuario}! O nível atual é **{nivel}%**."
-        else:
-            resposta = f"{cumprimento}, {usuario}! Não consegui obter o nível."
-        await update.message.reply_text(resposta, parse_mode="Markdown")
+    if "nível" in msg or "nivel" in msg:
+        resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
+
+        # Pega e formata ultimaAtualizacao dentro do mesmo bloco
+        ultima_atualizacao = dados.get("ultimaAtualizacao", None)
+        if ultima_atualizacao:
+            try:
+                dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
+                dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
+                ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
+                resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
+            except Exception as e:
+                print(f"Erro ao formatar data: {e}")
+                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+
+        await update.message.reply_text(resposta)
         return
 
     if "abs" in msg or "abastecimento" in msg:
-        if abs_status is not None:
-            resposta = f"{cumprimento}, {usuario}! Status do ABS: **{abs_status}**"
+        # Garante que sempre vai ter resposta inicial
+        if abastecimento is not None:
+            resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
         else:
-            resposta = f"{cumprimento}, {usuario}! Não consegui obter o ABS."
-        await update.message.reply_text(resposta, parse_mode="Markdown")
+            resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
+
+        # Adiciona Última Atualização se existir
+        ultima_atualizacao = dados.get("ultimaAtualizacao", None)
+        if ultima_atualizacao:
+            try:
+                dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
+                dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
+                ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
+                resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
+            except Exception as e:
+                print(f"Erro ao formatar data: {e}")
+                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+
+        await update.message.reply_text(resposta)
         return
 
-    if "apresente" in msg or "ajuda" in msg:
-        await update.message.reply_text(
+    if "apresente" in msg:
+        resposta = (
             f"{cumprimento}, {usuario}!\n\n"
-            "Sou a *Mel* 🤖\n\n"
-            "📌 Comandos disponíveis:\n"
-            "- `@Mel nivel`\n"
-            "- `@Mel abs`\n"
-            "- `@Mel alterar nivel 80`\n"
-            "- `@Mel alterar abs 1`\n"
-            "- `@Mel ligar alarmes`\n"
-            "- `@Mel desligar alarmes`",
-            parse_mode="Markdown"
+            "Eu sou a @Mel, a assistente do Sensor de Nível. "
+            "Estou aqui para ajudar na obtenção de informações sobre o nível e o status atual do abastecimento da caixa d'água.\n\n"
+            "Para que eu diga qual é o nível atual de água, basta me chamar assim: \"@Mel qual é o nível?\"\n"
+            "Para saber qual é o status do abastecimento, me chame assim: \"@Mel qual é o abs?\"\n"
+            "Para saber quais são os links do mostrador do nível e do status do abastecimento, é só me chamar assim: \"@Mel me mande os links\"\n"
+            "Para saber qual é o status dos alarmes, é só me chamar assim: \"@Mel alarme\"\n"
+            "Para modificar o status dos alarmes, pode me chamar assim: \"@Mel ligar alarmes\" ou \"@Mel desligar alarmes\", "
+            "também \"@Mel ligar alarme de nivel\" ou ainda \"@Mel desligar alarme de abs\"\n"
+            "Pronto, facinho né? Vamos tentar?"
         )
+        await update.message.reply_text(resposta)
         return
 
-    await update.message.reply_text(
-        f"{cumprimento}, {usuario}! Não entendi o comando 😅"
-    )
+    # Padrão
+    await update.message.reply_text(f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso...")
 
-# ================= MAIN =================
+# ---------------------- Main ----------------------
 
 def main():
     token = os.getenv("BOT_TOKEN")
     if not token:
-        print("ERRO: BOT_TOKEN não definido.")
+        print("ERRO: Defina a variável de ambiente BOT_TOKEN com o token do bot Telegram.")
         return
 
-    app = (
-        ApplicationBuilder()
-        .token(token)
-        .build()
-    )
-
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
+    app = ApplicationBuilder().token(token).build()
+    app.add_handler(MessageHandler(filters.TEXT, responder))
 
     print("Bot @Mel rodando...")
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling()
 
-
-# ====== ENTRY POINT ======
 if __name__ == "__main__":
     main()
