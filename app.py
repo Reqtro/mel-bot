@@ -143,14 +143,12 @@ def main():
         print("ERRO: BOT_TOKEN não definido.")
         return
 
-    # 🔥 FORÇA IPv4 (ESSENCIAL NO RAILWAY)
+    # ✅ CONFIGURAÇÃO COMPATÍVEL COM RAILWAY
     request = HTTPXRequest(
         connect_timeout=60,
         read_timeout=60,
         write_timeout=60,
         pool_timeout=60,
-        http_version="1.1",
-        local_address="0.0.0.0"
     )
 
     app = (
