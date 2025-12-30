@@ -1,9 +1,8 @@
 import os
 import re
+import requests
 from datetime import datetime
-
 import pytz
-import httpx
 
 from telegram import Update
 from telegram.ext import (
@@ -14,11 +13,10 @@ from telegram.ext import (
 )
 from telegram.request import HTTPXRequest
 
-
+# ================= CONFIG =================
 GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbyHjLESxkcUWO3yAy0rdDJrvWi5zRJ4rqqiHpRg1-n4Os0dSb0Y4Rmuu_xifWOKeg37/exec"
 
-
-# ---------------------- Funções Auxiliares ----------------------
+# ============== FUNÇÕES AUXILIARES ==============
 
 def cumprimento_por_horario():
     tz = pytz.timezone("America/Sao_Paulo")
@@ -32,41 +30,27 @@ def cumprimento_por_horario():
 
 
 async def alterar_celula_no_gs(celula, valor):
-    payload = {
-        "setGrafico": {
-            "celula": celula,
-            "valor": valor
-        }
-    }
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(GOOGLE_SHEETS_URL, json=payload)
+        payload = {
+            "setGrafico": {
+                "celula": celula,
+                "valor": valor
+            }
+        }
+        requests.post(GOOGLE_SHEETS_URL, json=payload, timeout=5)
     except Exception as e:
-        print(f"Erro ao enviar POST: {e}")
+        print(f"Erro POST célula única: {e}")
 
 
 async def alterar_celulas_no_gs(dic_celulas_valores):
-    payload = {
-        "multiplosGraficos": [
-            {"celula": c, "valor": v}
-            for c, v in dic_celulas_valores.items()
-        ]
-    }
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(GOOGLE_SHEETS_URL, json=payload)
+        alteracoes = [{"celula": c, "valor": v} for c, v in dic_celulas_valores.items()]
+        payload = {"multiplosGraficos": alteracoes}
+        requests.post(GOOGLE_SHEETS_URL, json=payload, timeout=5)
     except Exception as e:
-        print(f"Erro ao enviar POST múltiplo: {e}")
+        print(f"Erro POST múltiplas células: {e}")
 
-
-async def obter_dados_planilha():
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(GOOGLE_SHEETS_URL)
-        response.raise_for_status()
-        return response.json()
-
-
-# ---------------------- Função Principal ----------------------
+# ================= HANDLER =================
 
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -75,118 +59,99 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text.lower()
     usuario = update.message.from_user.first_name
 
-    # 👉 COMPORTAMENTO ORIGINAL (QUE FUNCIONA)
+    # Só responde se for chamado
     if "@mel" not in msg:
         return
 
     cumprimento = cumprimento_por_horario()
 
-    # ------------------ Comandos de Alteração ------------------
-
-    match_nivel = re.search(r"(alterar|mudar) (alarme )?(de )?nivel (\d{1,3})", msg)
-    match_abs = re.search(r"(alterar|mudar) (alarme )?(de )?abs (\d{1,3})", msg)
+    # -------- ALTERAÇÕES --------
+    match_nivel = re.search(r"(alterar|mudar).*(nivel).*?(\d{1,3})", msg)
+    match_abs = re.search(r"(alterar|mudar).*(abs).*?(\d{1,3})", msg)
 
     if match_nivel:
-        await alterar_celula_no_gs("J29", int(match_nivel.group(4)))
-        await update.message.reply_text("Alteração realizada como desejado!")
+        valor = int(match_nivel.group(3))
+        await alterar_celula_no_gs("J29", valor)
+        await update.message.reply_text("Alteração realizada com sucesso!")
         return
 
     if match_abs:
-        await alterar_celula_no_gs("K29", int(match_abs.group(4)))
-        await update.message.reply_text("Alteração realizada como desejado!")
+        valor = int(match_abs.group(3))
+        await alterar_celula_no_gs("K29", valor)
+        await update.message.reply_text("Alteração realizada com sucesso!")
         return
 
     if "ligar alarmes" in msg:
         await alterar_celulas_no_gs({"H29": 1, "I29": 1})
-        await update.message.reply_text("Alteração realizada como desejado!")
+        await update.message.reply_text("Alarmes ligados!")
         return
 
     if "desligar alarmes" in msg:
         await alterar_celulas_no_gs({"H29": 2, "I29": 2})
-        await update.message.reply_text("Alteração realizada como desejado!")
+        await update.message.reply_text("Alarmes desligados!")
         return
 
-    if re.search(r"ligar (alarme )?(de )?nivel", msg):
-        await alterar_celula_no_gs("H29", 1)
-        await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if re.search(r"desligar (alarme )?(de )?nivel", msg):
-        await alterar_celula_no_gs("H29", 2)
-        await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if re.search(r"ligar (alarme )?(de )?abs", msg):
-        await alterar_celula_no_gs("I29", 1)
-        await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    if re.search(r"desligar (alarme )?(de )?abs", msg):
-        await alterar_celula_no_gs("I29", 2)
-        await update.message.reply_text("Alteração realizada como desejado!")
-        return
-
-    # ------------------ Comandos de Consulta ------------------
-
+    # -------- CONSULTAS --------
     try:
-        dados = await obter_dados_planilha()
+        response = requests.get(GOOGLE_SHEETS_URL, timeout=5)
+        dados = response.json()
     except Exception as e:
-        print(f"Erro ao buscar planilha: {e}")
-        await update.message.reply_text("Erro ao obter dados da planilha.")
+        print(f"Erro GET planilha: {e}")
+        await update.message.reply_text("Erro ao obter dados.")
         return
 
     nivel = dados.get("nivel")
-    abastecimento = dados.get("abastecimento")
-    h = int(dados.get("alarmeN", 0))
-    i = int(dados.get("alarmeAbs", 0))
-    ultima_atualizacao = dados.get("ultimaAtualizacao")
+    abs_status = dados.get("abastecimento")
 
-    if "alarme" in msg or "avisos" in msg:
-        resposta = (
-            f"{cumprimento}, {usuario}!\n"
-            f"Alarme Nível: {'Ligado' if h == 1 else 'Desligado'}\n"
-            f"Alarme ABS: {'Ligado' if i == 1 else 'Desligado'}"
-        )
+    if "nivel" in msg or "nível" in msg:
+        if nivel is not None:
+            resposta = f"{cumprimento}, {usuario}! O nível atual é {nivel}%."
+        else:
+            resposta = f"{cumprimento}, {usuario}! Não consegui obter o nível."
         await update.message.reply_text(resposta)
         return
 
-    if "nivel" in msg or "nível" in msg:
-        resposta = (
-            f"{cumprimento}, {usuario}! O nível atual é: {nivel}%"
-            if nivel is not None
-            else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
+    if "abs" in msg or "abastecimento" in msg:
+        if abs_status is not None:
+            resposta = f"{cumprimento}, {usuario}! Status do ABS: {abs_status}"
+        else:
+            resposta = f"{cumprimento}, {usuario}! Não consegui obter o ABS."
+        await update.message.reply_text(resposta)
+        return
+
+    if "apresente" in msg:
+        await update.message.reply_text(
+            f"{cumprimento}, {usuario}!\n"
+            "Sou a @Mel 🤖\n"
+            "Pergunte:\n"
+            "- @Mel nivel\n"
+            "- @Mel abs\n"
+            "- @Mel ligar alarmes\n"
+            "- @Mel desligar alarmes"
         )
+        return
 
-    elif "abs" in msg or "abastecimento" in msg:
-        resposta = (
-            f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
-            if abastecimento is not None
-            else f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
-        )
+    await update.message.reply_text(
+        f"{cumprimento}, {usuario}! Não entendi o comando 😅"
+    )
 
-    else:
-        resposta = f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso..."
-
-    if ultima_atualizacao:
-        try:
-            dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
-            dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
-            resposta += f"\n\nÚltima Atualização:\n{dt_sp.strftime('%d/%m/%Y %H:%M')}"
-        except Exception:
-            resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
-
-    await update.message.reply_text(resposta)
-
-
-# ---------------------- Main ----------------------
+# ================= MAIN =================
 
 def main():
     token = os.getenv("BOT_TOKEN")
     if not token:
-        print("ERRO: Defina a variável de ambiente BOT_TOKEN.")
+        print("ERRO: BOT_TOKEN não definido.")
         return
 
-    request = HTTPXRequest(connect_timeout=30, read_timeout=30)
+    # 🔥 FORÇA IPv4 (ESSENCIAL NO RAILWAY)
+    request = HTTPXRequest(
+        connect_timeout=60,
+        read_timeout=60,
+        write_timeout=60,
+        pool_timeout=60,
+        http_version="1.1",
+        local_address="0.0.0.0"
+    )
 
     app = (
         ApplicationBuilder()
@@ -198,7 +163,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
 
     print("Bot @Mel rodando...")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
