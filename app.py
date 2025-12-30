@@ -73,10 +73,14 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     msg = update.message.text.lower()
-    usuario = update.message.from_user.first_name
+bot_username = context.bot.username.lower()
 
-    if "@mel" not in msg:
-        return
+if not any(
+    ent.type == "mention" and msg[ent.offset: ent.offset + ent.length].lower() == f"@{bot_username}"
+    for ent in (update.message.entities or [])
+):
+    return
+
 
     cumprimento = cumprimento_por_horario()
 
