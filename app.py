@@ -33,7 +33,7 @@ async def get_session() -> aiohttp.ClientSession:
     """Obtém ou cria uma sessão HTTP assíncrona"""
     global session
     if session is None or session.closed:
-        timeout = aiohttp.ClientTimeout(total=10)  # Timeout de 10 segundos
+        timeout = aiohttp.ClientTimeout(total=10)
         session = aiohttp.ClientSession(timeout=timeout)
     return session
 
@@ -51,13 +51,11 @@ async def fetch_google_sheets_data(force_refresh: bool = False) -> Optional[Dict
         async with session.get(GOOGLE_SHEETS_URL, timeout=10) as response:
             if response.status == 200:
                 dados = await response.json()
-                # Atualiza cache
                 dados_cache = dados
                 cache_timestamp = datetime.now()
                 return dados
             else:
                 print(f"Erro HTTP {response.status} ao buscar planilha")
-                # Retorna cache se disponível, mesmo que antigo
                 return dados_cache if dados_cache else None
     except asyncio.TimeoutError:
         print("Timeout ao buscar dados do Google Sheets")
@@ -74,7 +72,6 @@ async def alterar_celula_no_gs(celula: str, valor: int) -> bool:
         
         async with session.post(GOOGLE_SHEETS_URL, json=payload, timeout=10) as response:
             if response.status == 200:
-                # Invalida o cache após alteração
                 global cache_timestamp
                 cache_timestamp = None
                 return True
@@ -97,7 +94,6 @@ async def alterar_celulas_no_gs(dic_celulas_valores: Dict[str, int]) -> bool:
         
         async with session.post(GOOGLE_SHEETS_URL, json=payload, timeout=10) as response:
             if response.status == 200:
-                # Invalida o cache após alteração
                 global cache_timestamp
                 cache_timestamp = None
                 return True
@@ -110,6 +106,12 @@ async def alterar_celulas_no_gs(dic_celulas_valores: Dict[str, int]) -> bool:
     except Exception as e:
         print(f"Erro ao alterar células: {e}")
         return False
+
+async def fechar_sessao():
+    """Fecha a sessão HTTP"""
+    global session
+    if session and not session.closed:
+        await session.close()
 
 # ---------------------- Função Principal ----------------------
 
@@ -190,7 +192,6 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ------------------ Comandos de Consulta ------------------
 
-    # Busca dados (com cache)
     dados = await fetch_google_sheets_data()
     
     if dados is None:
@@ -214,7 +215,6 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(resposta)
         return
 
-    # VERIFICAÇÃO DE "abs" 
     if re.search(r'\babs\b', msg):
         if abastecimento is not None:
             resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
@@ -235,7 +235,6 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(resposta)
         return
 
-    # Verificação de "nivel"
     if re.search(r'\bnivel\b', msg) or "nível" in msg:
         resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
 
@@ -288,13 +287,12 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(resposta)
         return
 
-    # Padrão
     await processing_msg.delete()
     await update.message.reply_text(f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso...")
 
 # ---------------------- Main ----------------------
 
-async def main():
+def main():
     token = os.getenv("BOT_TOKEN")
     if not token:
         print("ERRO: Defina a variável de ambiente BOT_TOKEN com o token do bot Telegram.")
@@ -305,12 +303,17 @@ async def main():
 
     print("Bot @Mel rodando...")
     
+    # Configura cleanup para fechar a sessão ao encerrar
+    loop = asyncio.get_event_loop()
+    
     try:
-        await app.run_polling()
+        app.run_polling()
+    except KeyboardInterrupt:
+        print("\nEncerrando bot...")
     finally:
         # Fecha a sessão HTTP ao encerrar
-        if session and not session.closed:
-            await session.close()
+        loop.run_until_complete(fechar_sessao())
+        loop.close()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
