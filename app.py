@@ -42,7 +42,7 @@ async def alterar_celula_no_gs(celula, valor):
         async with httpx.AsyncClient(timeout=10) as client:
             await client.post(GOOGLE_SHEETS_URL, json=payload)
     except Exception as e:
-        print(f"Erro ao enviar POST (celula única): {e}")
+        print(f"Erro ao enviar POST: {e}")
 
 
 async def alterar_celulas_no_gs(dic_celulas_valores):
@@ -56,7 +56,7 @@ async def alterar_celulas_no_gs(dic_celulas_valores):
         async with httpx.AsyncClient(timeout=10) as client:
             await client.post(GOOGLE_SHEETS_URL, json=payload)
     except Exception as e:
-        print(f"Erro ao enviar POST (múltiplas células): {e}")
+        print(f"Erro ao enviar POST múltiplo: {e}")
 
 
 async def obter_dados_planilha():
@@ -74,14 +74,9 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = update.message.text.lower()
     usuario = update.message.from_user.first_name
-    bot_username = context.bot.username.lower()
 
-    # Verifica se o bot foi mencionado
-    if not any(
-        ent.type == "mention"
-        and msg[ent.offset: ent.offset + ent.length].lower() == f"@{bot_username}"
-        for ent in (update.message.entities or [])
-    ):
+    # 👉 COMPORTAMENTO ORIGINAL (QUE FUNCIONA)
+    if "@mel" not in msg:
         return
 
     cumprimento = cumprimento_por_horario()
@@ -92,14 +87,12 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     match_abs = re.search(r"(alterar|mudar) (alarme )?(de )?abs (\d{1,3})", msg)
 
     if match_nivel:
-        valor = int(match_nivel.group(4))
-        await alterar_celula_no_gs("J29", valor)
+        await alterar_celula_no_gs("J29", int(match_nivel.group(4)))
         await update.message.reply_text("Alteração realizada como desejado!")
         return
 
     if match_abs:
-        valor = int(match_abs.group(4))
-        await alterar_celula_no_gs("K29", valor)
+        await alterar_celula_no_gs("K29", int(match_abs.group(4)))
         await update.message.reply_text("Alteração realizada como desejado!")
         return
 
@@ -151,7 +144,6 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "alarme" in msg or "avisos" in msg:
         resposta = (
             f"{cumprimento}, {usuario}!\n"
-            f"O status dos Alarmes é:\n"
             f"Alarme Nível: {'Ligado' if h == 1 else 'Desligado'}\n"
             f"Alarme ABS: {'Ligado' if i == 1 else 'Desligado'}"
         )
@@ -171,6 +163,7 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if abastecimento is not None
             else f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
         )
+
     else:
         resposta = f"{cumprimento}, {usuario}! Ixi... Não posso te ajudar com isso..."
 
@@ -193,10 +186,7 @@ def main():
         print("ERRO: Defina a variável de ambiente BOT_TOKEN.")
         return
 
-    request = HTTPXRequest(
-        connect_timeout=30,
-        read_timeout=30,
-    )
+    request = HTTPXRequest(connect_timeout=30, read_timeout=30)
 
     app = (
         ApplicationBuilder()
