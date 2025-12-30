@@ -130,7 +130,32 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(resposta)
         return
 
-    if "nível" in msg or "nivel" in msg:
+    # VERIFICAÇÃO DE "abs" PRIMEIRO, ANTES DE "nivel"
+    # Usando regex para capturar "abs" como palavra completa
+    if re.search(r'\babs\b', msg):
+        # Garante que sempre vai ter resposta inicial
+        if abastecimento is not None:
+            resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
+        else:
+            resposta = f"{cumprimento}, {usuario}! Não consegui obter o status do abastecimento agora."
+
+        # Adiciona Última Atualização se existir
+        ultima_atualizacao = dados.get("ultimaAtualizacao", None)
+        if ultima_atualizacao:
+            try:
+                dt = datetime.fromisoformat(ultima_atualizacao.replace("Z", "+00:00"))
+                dt_sp = dt.astimezone(pytz.timezone("America/Sao_Paulo"))
+                ultima_formatada = dt_sp.strftime("%d/%m/%Y %H:%M")
+                resposta += f"\n\nÚltima Atualização:\n{ultima_formatada}"
+            except Exception as e:
+                print(f"Erro ao formatar data: {e}")
+                resposta += f"\n\nÚltima Atualização:\n{ultima_atualizacao}"
+
+        await update.message.reply_text(resposta)
+        return
+
+    # Também corrigido para "nivel" como palavra completa
+    if re.search(r'\bnivel\b', msg) or "nível" in msg:
         resposta = f"{cumprimento}, {usuario}! O nível atual é: {nivel}%" if nivel is not None else f"{cumprimento}, {usuario}! Não consegui obter o nível agora."
 
         # Pega e formata ultimaAtualizacao dentro do mesmo bloco
@@ -148,7 +173,7 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(resposta)
         return
 
-    if "abs" in msg or "abastecimento" in msg:
+    if "abastecimento" in msg:
         # Garante que sempre vai ter resposta inicial
         if abastecimento is not None:
             resposta = f"{cumprimento}, {usuario}! O status do abastecimento é: {abastecimento}"
