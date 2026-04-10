@@ -7,6 +7,7 @@ import pytz
 from typing import Optional, Dict, Any
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
+import json
 
 GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbxOilI3KAkvluGawwAkTAGgLQMTQw54ZgaC2eSpc-BAbCuAZLl7cuK9-DFW-WhTUDa5/exec"
 
@@ -50,7 +51,9 @@ async def fetch_google_sheets_data(force_refresh: bool = False) -> Optional[Dict
         session = await get_session()
         async with session.get(GOOGLE_SHEETS_URL, timeout=10) as response:
             if response.status == 200:
-                dados = await response.json()
+                text = await response.text()
+                dados = json.loads(text)
+                
                 dados_cache = dados
                 cache_timestamp = datetime.now()
                 return dados
