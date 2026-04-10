@@ -302,11 +302,18 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT, responder))
 
     print("Bot @Mel rodando...")
-
+    
+    # Configura cleanup para fechar a sessão ao encerrar
+    loop = asyncio.get_event_loop()
+    
     try:
         app.run_polling()
+    except KeyboardInterrupt:
+        print("\nEncerrando bot...")
     finally:
-        print("Encerrando bot...")
+        # Fecha a sessão HTTP ao encerrar
+        loop.run_until_complete(fechar_sessao())
+        loop.close()
 
 if __name__ == "__main__":
     main()
