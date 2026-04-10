@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
-GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbykSHtafj1PKrW92vyj7GfBRP1c4XiRe7_OL1AoK7aeiM-FlX83eNIMb3r3ATgmmdnM/exec"
+GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbxOilI3KAkvluGawwAkTAGgLQMTQw54ZgaC2eSpc-BAbCuAZLl7cuK9-DFW-WhTUDa5/exec"
 
 # Cache para armazenar dados temporariamente
 dados_cache: Dict[str, Any] = {}
