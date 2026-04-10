@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
-GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwPqeU6hSv4UVtHgdTqYac1HLicm0rCI8VcdlR3XqCHFHshb1IkqDBUYpDHey4QE6kX/exec"
+GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbykSHtafj1PKrW92vyj7GfBRP1c4XiRe7_OL1AoK7aeiM-FlX83eNIMb3r3ATgmmdnM/exec"
 
 # Cache para armazenar dados temporariamente
 dados_cache: Dict[str, Any] = {}
@@ -302,18 +302,15 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT, responder))
 
     print("Bot @Mel rodando...")
-    
-    # Configura cleanup para fechar a sessão ao encerrar
-    loop = asyncio.get_event_loop()
-    
+
     try:
         app.run_polling()
-    except KeyboardInterrupt:
-        print("\nEncerrando bot...")
     finally:
-        # Fecha a sessão HTTP ao encerrar
-        loop.run_until_complete(fechar_sessao())
-        loop.close()
+        # fecha sessão corretamente (modo moderno)
+        try:
+            asyncio.run(fechar_sessao())
+        except RuntimeError:
+            pass
 
 if __name__ == "__main__":
     main()
