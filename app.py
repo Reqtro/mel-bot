@@ -306,11 +306,7 @@ def main():
     try:
         app.run_polling()
     finally:
-        # fecha sessão corretamente (modo moderno)
-        try:
-            asyncio.run(fechar_sessao())
-        except RuntimeError:
-            pass
+        print("Encerrando bot...")
 
 if __name__ == "__main__":
     main()
